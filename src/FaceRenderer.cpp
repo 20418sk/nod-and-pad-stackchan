@@ -543,7 +543,7 @@ void FaceRenderer::drawDebug(const FaceDebugInfo& info)
     drawTarget_->endWrite();
 }
 
-void FaceRenderer::showCalibration()
+void FaceRenderer::showStartupCheck()
 {
     if (display_ == nullptr) {
         return;
@@ -551,14 +551,104 @@ void FaceRenderer::showCalibration()
     overlayActive_ = true;
     display_->startWrite();
     display_->fillScreen(kBackground);
-    display_->setFont(&fonts::efontJA_16);
     display_->setTextDatum(middle_center);
+    display_->setTextSize(1.0f);
+    display_->setFont(&fonts::Font4);
     display_->setTextColor(kPrimary, kBackground);
-    display_->drawString("音の再調整中", display_->width() / 2,
-                         display_->height() / 2 - 20);
+    display_->drawString("SERVO TESTING", display_->width() / 2,
+                         display_->height() / 2 - 28);
+    display_->setTextFont(3);
+    display_->setTextSize(2.0f);
     display_->setTextColor(kBlush, kBackground);
-    display_->drawString("しずかにしてね", display_->width() / 2,
-                         display_->height() / 2 + 20);
+    display_->drawString("PLEASE DO NOT TOUCH", display_->width() / 2,
+                         display_->height() / 2 + 30);
+    display_->endWrite();
+}
+
+void FaceRenderer::showCalibration(bool startup, uint8_t secondsRemaining)
+{
+    if (display_ == nullptr) {
+        return;
+    }
+    overlayActive_ = true;
+    display_->startWrite();
+    display_->fillScreen(kBackground);
+    display_->setTextDatum(middle_center);
+    display_->setTextSize(1.0f);
+    display_->setFont(&fonts::Font4);
+    display_->setTextColor(kPrimary, kBackground);
+    display_->drawString(startup ? "MIC CALIBRATION"
+                                 : "MIC RECALIBRATION",
+                         display_->width() / 2,
+                         display_->height() / 2 - 28);
+    // Use the requested Font3 slot for the supplementary countdown text.
+    display_->setTextFont(3);
+    display_->setTextSize(2.0f);
+    display_->setTextColor(kBlush, kBackground);
+    display_->drawString("PLEASE BE QUIET", display_->width() / 2,
+                         display_->height() / 2 + 12);
+    char countdown[32]{};
+    if (secondsRemaining >= 3) {
+        std::snprintf(countdown, sizeof(countdown), "3..");
+    } else if (secondsRemaining == 2) {
+        std::snprintf(countdown, sizeof(countdown), "3..2..");
+    } else {
+        std::snprintf(countdown, sizeof(countdown), "3..2..1..");
+    }
+    display_->drawString(countdown,
+                         display_->width() / 2,
+                         display_->height() / 2 + 52);
+    display_->endWrite();
+}
+
+void FaceRenderer::showStartupGuide(uint8_t page)
+{
+    if (display_ == nullptr) {
+        return;
+    }
+    overlayActive_ = true;
+    display_->startWrite();
+    display_->fillScreen(kBackground);
+    display_->setTextDatum(middle_center);
+    display_->setTextSize(1.0f);
+    const char* title = "SERVO TEST COMPLETE!";
+    const char* detail = "TAP TO TEST MIC";
+    uint16_t detailColor = TFT_GREEN;
+    if (page == 2) {
+        title = "ALL TESTS COMPLETE!";
+        detail = "TAP TO CONTINUE";
+    } else if (page == 3) {
+        title = "YOUR PRIVACY";
+        detail = "TAP TO CONTINUE";
+        detailColor = TFT_GREEN;
+    } else if (page >= 4) {
+        title = "READY TO LISTEN";
+        detail = "TAP TO START";
+    }
+    display_->setFont(&fonts::Font4);
+    display_->setTextColor(kPrimary, kBackground);
+    if (page == 3) {
+        display_->drawString(title, display_->width() / 2,
+                             display_->height() / 2 - 78);
+        // M5GFX's Font3 slot maps to its compact built-in font.
+        display_->setTextFont(3);
+        display_->setTextSize(2.0f);
+        display_->drawString("NO RECORDING", display_->width() / 2,
+                             display_->height() / 2 - 30);
+        display_->drawString("NO SPEECH ANALYSIS", display_->width() / 2,
+                             display_->height() / 2 + 6);
+        display_->drawString("LOCAL PROCESSING ONLY", display_->width() / 2,
+                             display_->height() / 2 + 42);
+        display_->setTextSize(1.0f);
+    } else {
+        display_->drawString(title, display_->width() / 2,
+                             display_->height() / 2 - 28);
+    }
+    display_->setTextFont(3);
+    display_->setTextSize(2.0f);
+    display_->setTextColor(detailColor, kBackground);
+    display_->drawString(detail, display_->width() / 2,
+                         display_->height() / 2 + (page == 3 ? 90 : 30));
     display_->endWrite();
 }
 

@@ -22,7 +22,27 @@ void MotionController::begin(uint32_t nowMs)
     failed_                  = false;
     verificationStartedMs_   = nowMs;
     lastVerificationPollMs_  = nowMs - app_config::motion::kServoVerificationPollMs;
-    moveHome(nowMs);
+
+    const int currentPitch = M5StackChan.Motion.getCurrentYAngle();
+    const int currentYaw = M5StackChan.Motion.getCurrentXAngle();
+    const bool alreadyHome =
+        std::abs(currentPitch - app_config::motion::kHomePitch) <=
+            app_config::motion::kServoVerificationTolerance &&
+        std::abs(currentYaw - app_config::motion::kHomeYaw) <=
+            app_config::motion::kYawVerificationTolerance;
+    if (alreadyHome) {
+        verifying_ = false;
+        ready_ = true;
+        return;
+    }
+
+    // Startup verification is intentionally read-only.  On a cold power-up
+    // the head may have relaxed to a slightly different angle; commanding a
+    // correction here causes the audible, sudden "servo whirl" the user sees.
+    // Normal interaction paths still call moveHome() when a deliberate return
+    // to the safe home pose is required.
+    verifying_ = false;
+    ready_ = true;
 }
 
 void MotionController::update(uint32_t nowMs)
@@ -120,8 +140,14 @@ bool MotionController::restorePitch(int pitchAngle, uint32_t nowMs)
 
 bool MotionController::moveHome(uint32_t nowMs)
 {
+    return moveHomeAtSpeed(app_config::motion::kHomeSpeed, 1000, nowMs);
+}
+
+bool MotionController::moveHomeAtSpeed(int speed, uint32_t moveDurationMs,
+                                       uint32_t nowMs)
+{
     const MotionStep sequence[] = {
-        {app_config::motion::kHomePitch, 1000, app_config::motion::kHomeSpeed},
+        {app_config::motion::kHomePitch, moveDurationMs, speed},
     };
     if (!startSequence(sequence, 1, nowMs)) {
         return false;
@@ -129,7 +155,7 @@ bool MotionController::moveHome(uint32_t nowMs)
     // 全動作の基準を必ず物理ホームへ合わせる。BSPのgoHome()は上下も0へ
     // 動かすため使わず、作品側の安全な上下ホームと横0度を個別に指令する。
     commandYawSafely(app_config::motion::kHomeYaw,
-                     app_config::motion::kHomeSpeed);
+                     speed);
     return true;
 }
 

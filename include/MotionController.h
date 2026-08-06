@@ -35,6 +35,8 @@ private:
     bool startSequence(const MotionStep* steps, std::size_t count,
                        uint32_t nowMs,
                        uint32_t suppressionAfterMs = 0);
+    bool moveHomeAtSpeed(int speed, uint32_t moveDurationMs,
+                         uint32_t nowMs);
     bool startPoseMove(int yawAngle, int pitchAngle, int speed,
                        uint32_t moveDurationMs,
                        uint32_t suppressionAfterMs, uint32_t nowMs);

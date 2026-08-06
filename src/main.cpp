@@ -31,15 +31,16 @@ public:
         FaceDebugInfo initialDebug;
         initialDebug.stateName = ListenerStateMachine::stateName(stateMachine_.state());
         faceRenderer_.render(FaceExpression::NORMAL, initialDebug, nowMs, true);
+        faceRenderer_.showStartupCheck();
 
         const bool audioOk = audioDetector_.begin();
         motionController_.begin(millis());
         setLed(0, 0, 0);
 
         if (!displayOk) {
-            setFatalError("画面エラー");
+            setFatalError("DISPLAY ERROR");
         } else if (!audioOk) {
-            setFatalError("マイクエラー");
+            setFatalError("MIC ERROR");
         }
     }
 
@@ -49,12 +50,13 @@ public:
         const uint32_t nowMs = millis();
 
         motionController_.update(nowMs);
+        updateCalibrationUi(nowMs);
         tryStartPendingReaction(nowMs);
         handleTouch(nowMs);
         handleHeadPet(nowMs);
 
         if (motionController_.failed() && !fatalError_) {
-            setFatalError("サーボエラー");
+            setFatalError("SERVO ERROR");
         }
 
         if (pendingManualCalibration_ && !fatalError_ &&
@@ -64,23 +66,22 @@ public:
             !headTouchAudioGuard_.suppressed() &&
             !motionController_.isMicrophoneSuppressed(nowMs)) {
             pendingManualCalibration_ = false;
-            audioDetector_.startCalibration(nowMs,
-                                            app_config::audio::kManualCalibrationMs);
+            beginCalibration(nowMs, app_config::audio::kManualCalibrationMs,
+                             false);
             Serial.println("[音] 再キャリブレーション開始");
         }
 
-        // 起動時のホーム移動音を環境ノイズとして学習しない。サーボがホームへ
-        // 到達し、動作後の抑制期間も終わってから静かな音だけで初期較正する。
-        if (!startupCalibrationStarted_ && !fatalError_ &&
+        // サーボ到達と静音待ちの完了後、タップされるまでマイク較正へ進まない。
+        if (!startupServoTestCompleteShown_ && !fatalError_ &&
             audioDetector_.healthy() &&
             motionController_.isReady() &&
             !headPetController_.active() &&
             !headTouchAudioGuard_.suppressed() &&
             !motionController_.isMicrophoneSuppressed(nowMs)) {
-            startupCalibrationStarted_ = true;
-            audioDetector_.startCalibration(nowMs,
-                                            app_config::audio::kStartupCalibrationMs);
-            Serial.println("[音] 起動時キャリブレーション開始");
+            startupServoTestCompleteShown_ = true;
+            startupGuidePage_ = 1;
+            faceRenderer_.showStartupGuide(startupGuidePage_);
+            Serial.println("[サーボ] 起動時テスト完了");
         }
 
         const ListenerState currentState = stateMachine_.state();
@@ -89,28 +90,34 @@ public:
         const bool noiseLearningAllowed =
             (currentState == ListenerState::IDLE || currentState == ListenerState::SLEEPING) &&
             !servoSuppressed &&
-            !audioDetector_.isCalibrating() && !headPetController_.active() &&
+            !audioDetector_.isCalibrating() && startupGuidePage_ == 0 &&
+            !headPetController_.active() &&
             !headTouchAudioGuard_.suppressed();
         const bool directionEstimationAllowed =
             !servoSuppressed && !motionController_.isBusy() &&
             motionController_.isReady() && !audioDetector_.isCalibrating() &&
+            startupGuidePage_ == 0 &&
             !headPetController_.active() &&
             !headTouchAudioGuard_.suppressed();
 
         const bool newAudioBlock = audioDetector_.update(
             nowMs, noiseLearningAllowed, directionEstimationAllowed);
         if (!audioDetector_.healthy() && !fatalError_) {
-            setFatalError("マイクエラー");
+            setFatalError("MIC ERROR");
         }
 
         if (audioDetector_.takeCalibrationCompleted()) {
             if (manualCalibrationUi_) {
                 manualCalibrationUi_ = false;
+                calibrationUiActive_ = false;
                 faceRenderer_.clearOverlay();
                 stateMachine_.resetToIdle(nowMs);
                 setLed(0, 0, 0);
                 Serial.println("[音] 再キャリブレーション完了");
             } else {
+                calibrationUiActive_ = false;
+                startupGuidePage_ = 2;
+                faceRenderer_.showStartupGuide(startupGuidePage_);
                 Serial.println("[音] 起動時キャリブレーション完了");
             }
         }
@@ -130,6 +137,7 @@ public:
         input.audioHealthy       = audioDetector_.healthy();
         input.detectionSuppressed = audioDetector_.isCalibrating() ||
                                     motionController_.isMicrophoneSuppressed(nowMs) ||
+                                    startupGuidePage_ != 0 ||
                                     headPetController_.active() ||
                                     headTouchAudioGuard_.suppressed();
         input.reactionComplete   = !motionController_.isBusy();
@@ -181,6 +189,36 @@ private:
         return endNodPlanner_.next(values);
     }
 
+    void beginCalibration(uint32_t nowMs, uint32_t durationMs, bool startup)
+    {
+        calibrationUiActive_ = true;
+        calibrationUiStartup_ = startup;
+        calibrationUiStartedMs_ = nowMs;
+        calibrationUiDurationMs_ = durationMs;
+        calibrationUiLastSecond_ = 0;
+        faceRenderer_.showCalibration(
+            startup, static_cast<uint8_t>((durationMs + 999U) / 1000U));
+        audioDetector_.startCalibration(nowMs, durationMs);
+    }
+
+    void updateCalibrationUi(uint32_t nowMs)
+    {
+        if (!calibrationUiActive_ || !audioDetector_.isCalibrating()) {
+            return;
+        }
+        const uint32_t age = static_cast<uint32_t>(nowMs - calibrationUiStartedMs_);
+        const uint32_t remainingMs = age >= calibrationUiDurationMs_
+                                          ? 1U
+                                          : calibrationUiDurationMs_ - age;
+        const uint8_t remainingSeconds = static_cast<uint8_t>(
+            (remainingMs + 999U) / 1000U);
+        if (remainingSeconds != calibrationUiLastSecond_) {
+            calibrationUiLastSecond_ = remainingSeconds;
+            faceRenderer_.showCalibration(calibrationUiStartup_,
+                                           remainingSeconds);
+        }
+    }
+
     void handleTouch(uint32_t nowMs)
     {
         int16_t touchX = 0;
@@ -197,6 +235,7 @@ private:
         }
 
         if (touching && touching_ && !longPressHandled_ &&
+            startupGuidePage_ == 0 &&
             elapsed(nowMs, touchStartedMs_, app_config::touch::kLongPressMs)) {
             longPressHandled_ = true;
             if (!fatalError_ && !motionController_.isBusy() &&
@@ -207,12 +246,12 @@ private:
                     stateMachine_.state() == ListenerState::SLEEPING;
                 stateMachine_.resetToIdle(nowMs);
                 manualCalibrationUi_ = true;
-                faceRenderer_.showCalibration();
+                faceRenderer_.showCalibration(false, 3);
                 setLed(0, 0, 5);
 
                 if (wasSleeping) {
                     if (!motionController_.moveHome(nowMs)) {
-                        setFatalError("サーボエラー");
+            setFatalError("SERVO ERROR");
                         return;
                     }
                 }
@@ -221,8 +260,9 @@ private:
                     pendingManualCalibration_ = true;
                     Serial.println("[音] サーボ静音待ち");
                 } else {
-                    audioDetector_.startCalibration(
-                        nowMs, app_config::audio::kManualCalibrationMs);
+                    beginCalibration(nowMs,
+                                     app_config::audio::kManualCalibrationMs,
+                                     false);
                     Serial.println("[音] 再キャリブレーション開始");
                 }
             }
@@ -232,6 +272,26 @@ private:
         if (!touching && touching_) {
             const uint32_t heldMs = static_cast<uint32_t>(nowMs - touchStartedMs_);
             touching_ = false;
+            if (!longPressHandled_ &&
+                heldMs >= app_config::touch::kDebounceMs &&
+                startupGuidePage_ != 0) {
+                if (startupGuidePage_ == 1) {
+                    startupGuidePage_ = 0;
+                    beginCalibration(nowMs,
+                                     app_config::audio::kStartupCalibrationMs,
+                                     true);
+                    Serial.println("[音] 起動時キャリブレーション開始");
+                } else if (startupGuidePage_ < 4) {
+                    ++startupGuidePage_;
+                    faceRenderer_.showStartupGuide(startupGuidePage_);
+                } else {
+                    startupGuidePage_ = 0;
+                    faceRenderer_.clearOverlay();
+                    faceRenderer_.render(expressionForState(), makeDebugInfo(),
+                                         nowMs, true);
+                }
+                return;
+            }
             if (!longPressHandled_ && heldMs >= app_config::touch::kDebounceMs &&
                 !fatalError_ && !manualCalibrationUi_) {
                 faceRenderer_.setDebugEnabled(!faceRenderer_.debugEnabled());
@@ -260,6 +320,7 @@ private:
             Serial.println("[頭部タッチ] 機械音の判定抑制を開始");
         }
         const bool acceptsNewSwipe = !fatalError_ && !manualCalibrationUi_ &&
+                                     startupGuidePage_ == 0 &&
                                      audioDetector_.healthy() &&
                                      motionController_.isReady();
 
@@ -311,7 +372,7 @@ private:
             // 寝姿勢から安全ホームへ戻る間は音声判定を抑制し、起床のきっかけを
             // そのまま発話として数えない。
             if (!motionController_.moveHome(nowMs)) {
-                setFatalError("サーボエラー");
+            setFatalError("SERVO ERROR");
                 return;
             }
             stateMachine_.resetToIdle(nowMs);
@@ -320,7 +381,7 @@ private:
 
         if (output.stateChanged && output.state == ListenerState::SLEEPING) {
             if (!motionController_.sleepPose(nowMs)) {
-                setFatalError("サーボエラー");
+            setFatalError("SERVO ERROR");
                 return;
             }
         }
@@ -370,7 +431,7 @@ private:
         }
 
         if (!started) {
-            setFatalError("サーボエラー");
+            setFatalError("SERVO ERROR");
         } else {
             lastStartedReaction_ = pendingReaction_;
         }
@@ -512,7 +573,13 @@ private:
     bool longPressHandled_{false};
     bool manualCalibrationUi_{false};
     bool pendingManualCalibration_{false};
-    bool startupCalibrationStarted_{false};
+    bool calibrationUiActive_{false};
+    bool calibrationUiStartup_{false};
+    uint32_t calibrationUiStartedMs_{0};
+    uint32_t calibrationUiDurationMs_{0};
+    uint8_t calibrationUiLastSecond_{0};
+    bool startupServoTestCompleteShown_{false};
+    uint8_t startupGuidePage_{0};
     bool fatalError_{false};
     bool pendingPetRestore_{false};
     bool petMotionUsed_{false};

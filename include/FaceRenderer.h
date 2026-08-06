@@ -37,7 +37,9 @@ public:
 
     void render(FaceExpression expression, const FaceDebugInfo& debugInfo,
                 uint32_t nowMs, bool force = false);
-    void showCalibration();
+    void showStartupCheck();
+    void showCalibration(bool startup, uint8_t secondsRemaining);
+    void showStartupGuide(uint8_t page);
     void showError(const char* shortMessage);
     void clearOverlay();
 

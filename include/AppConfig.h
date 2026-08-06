@@ -24,7 +24,7 @@ constexpr float kStartThresholdMargin = 160.0F;
 constexpr float kEndThresholdRatio = 1.7F;
 constexpr float kEndThresholdMargin = 80.0F;
 
-constexpr uint32_t kStartupCalibrationMs = 1500;
+constexpr uint32_t kStartupCalibrationMs = 3000;
 constexpr uint32_t kManualCalibrationMs = 3000;
 constexpr std::size_t kCalibrationSamples = 128;
 constexpr uint8_t kMicNoiseFilterLevel = 16;
@@ -75,7 +75,7 @@ constexpr int kHeadPetSpeed = 170;
 
 constexpr uint32_t kServoSoundSuppressionAfterMs = 650;
 constexpr uint32_t kListeningNodIntervalMs = 1600;
-constexpr uint32_t kServoVerificationTimeoutMs = 2600;
+constexpr uint32_t kServoVerificationTimeoutMs = 4200;
 constexpr uint32_t kServoVerificationPollMs = 100;
 constexpr int kServoVerificationTolerance = 80;
 constexpr int kYawVerificationTolerance = 80;
