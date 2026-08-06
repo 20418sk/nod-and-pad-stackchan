@@ -4,12 +4,12 @@
 
 struct EndNodPlan {
     uint8_t count{1};
-    int targetPitch{120};
-    int downSpeed{180};
-    int returnSpeed{150};
-    uint32_t downHoldMs{500};
-    uint32_t betweenHoldMs{500};
-    uint32_t finalHoldMs{850};
+    int targetPitch{100};
+    int downSpeed{205};
+    int returnSpeed{185};
+    uint32_t downHoldMs{300};
+    uint32_t betweenHoldMs{460};
+    uint32_t finalHoldMs{560};
 };
 
 struct EndNodRandomValues {

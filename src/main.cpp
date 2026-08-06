@@ -11,6 +11,7 @@
 #include "HeadTouchAudioGuard.h"
 #include "ListenerStateMachine.h"
 #include "MotionController.h"
+#include "ScreenTouchMapper.h"
 
 namespace {
 
@@ -50,6 +51,7 @@ public:
         const uint32_t nowMs = millis();
 
         motionController_.update(nowMs);
+        updateScreenLook(nowMs);
         updateCalibrationUi(nowMs);
         tryStartPendingReaction(nowMs);
         handleTouch(nowMs);
@@ -154,10 +156,6 @@ public:
             }
             lastStartedReaction_ = ReactionType::NONE;
         }
-        if (output.stateChanged && output.state == ListenerState::LISTENING) {
-            lastListeningNodMs_ = nowMs;
-        }
-        updateListeningNod(nowMs);
         if (!headPetController_.active()) {
             handleListenerOutput(output, nowMs);
         }
@@ -224,18 +222,38 @@ private:
         int16_t touchX = 0;
         int16_t touchY = 0;
         const bool touching = M5StackChan.Display().getTouch(&touchX, &touchY);
-        (void)touchX;
-        (void)touchY;
-
         if (touching && !touching_) {
             touching_        = true;
             longPressHandled_ = false;
             touchStartedMs_   = nowMs;
+            touchStartedX_    = touchX;
+            const int width = M5StackChan.Display().width();
+            const int height = M5StackChan.Display().height();
+            touchStartedInDebugCorner_ = ScreenTouchMapper::isDebugCorner(
+                touchX, touchY, width, height);
+            touchStartedInCalibrationArea_ =
+                ScreenTouchMapper::isCalibrationArea(
+                    touchX, touchY, width, height);
             return;
         }
 
         if (touching && touching_ && !longPressHandled_ &&
-            startupGuidePage_ == 0 &&
+            startupGuidePage_ == 0 && touchStartedInDebugCorner_ &&
+            elapsed(nowMs, touchStartedMs_,
+                    app_config::touch::kDebugLongPressMs)) {
+            longPressHandled_ = true;
+            if (!fatalError_ && !manualCalibrationUi_) {
+                faceRenderer_.setDebugEnabled(!faceRenderer_.debugEnabled());
+                faceRenderer_.render(expressionForState(), makeDebugInfo(),
+                                     nowMs, true);
+                Serial.printf("[display] debug %s\n",
+                              faceRenderer_.debugEnabled() ? "ON" : "OFF");
+            }
+            return;
+        }
+
+        if (touching && touching_ && !longPressHandled_ &&
+            startupGuidePage_ == 0 && touchStartedInCalibrationArea_ &&
             elapsed(nowMs, touchStartedMs_, app_config::touch::kLongPressMs)) {
             longPressHandled_ = true;
             if (!fatalError_ && !motionController_.isBusy() &&
@@ -285,6 +303,10 @@ private:
                     ++startupGuidePage_;
                     faceRenderer_.showStartupGuide(startupGuidePage_);
                 } else {
+                    if (!motionController_.settleToHome(nowMs)) {
+                        setFatalError("SERVO ERROR");
+                        return;
+                    }
                     startupGuidePage_ = 0;
                     faceRenderer_.clearOverlay();
                     faceRenderer_.render(expressionForState(), makeDebugInfo(),
@@ -292,18 +314,71 @@ private:
                 }
                 return;
             }
-            if (!longPressHandled_ && heldMs >= app_config::touch::kDebounceMs &&
-                !fatalError_ && !manualCalibrationUi_) {
-                faceRenderer_.setDebugEnabled(!faceRenderer_.debugEnabled());
-                faceRenderer_.render(expressionForState(), makeDebugInfo(), nowMs, true);
-                Serial.printf("[表示] デバッグ表示 %s\n",
-                              faceRenderer_.debugEnabled() ? "ON" : "OFF");
+            if (!longPressHandled_ &&
+                heldMs >= app_config::touch::kDebounceMs &&
+                heldMs <= app_config::touch::kShortTapMaximumMs) {
+                handleScreenTap(nowMs);
+                return;
             }
         }
     }
 
+    void handleScreenTap(uint32_t nowMs)
+    {
+        if (fatalError_ || manualCalibrationUi_ || startupGuidePage_ != 0 ||
+            !audioDetector_.healthy() || !motionController_.isReady() ||
+            motionController_.isBusy() || physicalPetSession_ ||
+            (headPetController_.active() && !screenLookActive_) ||
+            stateMachine_.state() != ListenerState::IDLE) {
+            return;
+        }
+
+        const ScreenTouchRegion region = ScreenTouchMapper::horizontalRegion(
+            touchStartedX_, M5StackChan.Display().width());
+        if (region == ScreenTouchRegion::CENTER) {
+            screenBoopRequested_ = true;
+            return;
+        }
+
+        const int nextYaw = ScreenTouchMapper::steppedYawTarget(
+            screenYawTarget_, region,
+            app_config::motion::kScreenTouchYawStep,
+            app_config::motion::kScreenTouchYawMax);
+        if (nextYaw != screenYawTarget_) {
+            if (!motionController_.lookTowardScreenTouch(nextYaw, nowMs)) {
+                setFatalError("SERVO ERROR");
+                return;
+            }
+            screenYawTarget_ = nextYaw;
+        }
+        screenBoopRequested_ = true;
+        screenLookActive_ = true;
+        screenLookStartedMs_ = nowMs;
+    }
+
+    void updateScreenLook(uint32_t nowMs)
+    {
+        if (!screenLookActive_ ||
+            !elapsed(nowMs, screenLookStartedMs_,
+                     app_config::motion::kScreenTouchLookDurationMs) ||
+            fatalError_ || manualCalibrationUi_ || startupGuidePage_ != 0 ||
+            headPetController_.active() || motionController_.isBusy() ||
+            stateMachine_.state() != ListenerState::IDLE) {
+            return;
+        }
+
+        if (!motionController_.returnYawHome(nowMs)) {
+            setFatalError("SERVO ERROR");
+            return;
+        }
+        screenYawTarget_ = app_config::motion::kHomeYaw;
+        screenLookActive_ = false;
+    }
+
     void handleHeadPet(uint32_t nowMs)
     {
+        const bool screenBoop = screenBoopRequested_;
+        screenBoopRequested_ = false;
         auto& touchSensor = M5StackChan.TouchSensor;
         const auto intensities = touchSensor.getIntensities();
         const bool swiped = headPetGestureDetector_.update(
@@ -324,13 +399,15 @@ private:
                                      audioDetector_.healthy() &&
                                      motionController_.isReady();
 
+        const bool acceptedGesture = acceptsNewSwipe && (swiped || screenBoop);
         const HeadPetUpdate petUpdate = headPetController_.update(
-            nowMs, acceptsNewSwipe && swiped, released);
+            nowMs, acceptedGesture, released || screenBoop);
 
         if (petUpdate.entered) {
             pitchBeforePet_ = motionController_.currentPitch();
             pendingPetRestore_ = false;
             petMotionUsed_ = false;
+            pendingPetMotion_ = false;
             // 頭部を叩いた機械音を、なでなで終了後に発話として処理しない。
             stateMachine_.resetToIdle(nowMs);
             lastStartedReaction_ = ReactionType::NONE;
@@ -338,23 +415,41 @@ private:
 
         if (petUpdate.swipeAccepted) {
             const HeadPetGestureType gestureType =
-                headPetGestureDetector_.lastGestureType();
+                screenBoop ? HeadPetGestureType::SINGLE_TAP
+                           : headPetGestureDetector_.lastGestureType();
+            if (!screenBoop) {
+                physicalPetSession_ = true;
+            }
             faceRenderer_.setPettingTapStyle(
                 gestureType == HeadPetGestureType::SINGLE_TAP);
-            if (gestureType == HeadPetGestureType::SWIPE &&
-                !motionController_.isBusy()) {
-                // 動作中なら公式実装と同様に表情だけ反応し、サーボ命令は重ねない。
-                petMotionUsed_ = motionController_.headPetMotion(nowMs) ||
-                                 petMotionUsed_;
+            if (gestureType == HeadPetGestureType::SWIPE) {
+                if (motionController_.isBusy()) {
+                    // 横向きの途中でもなでなで入力を捨てず、移動完了後に
+                    // 上下動作を重ねる。
+                    pendingPetMotion_ = true;
+                } else {
+                    petMotionUsed_ = motionController_.headPetMotion(nowMs) ||
+                                     petMotionUsed_;
+                }
             }
             Serial.println(gestureType == HeadPetGestureType::SINGLE_TAP
                                ? "[頭部タッチ] 1回タップを検出"
                                : "[なでなで] 頭部スワイプを検出");
         }
 
+        if (pendingPetMotion_ && headPetController_.active() && !fatalError_ &&
+            motionController_.isReady() && !motionController_.isBusy()) {
+            if (motionController_.headPetMotion(nowMs)) {
+                pendingPetMotion_ = false;
+                petMotionUsed_ = true;
+            }
+        }
+
         if (petUpdate.restored) {
+            pendingPetMotion_ = false;
             pendingPetRestore_ = petMotionUsed_;
             petMotionUsed_ = false;
+            physicalPetSession_ = false;
         }
 
         if (pendingPetRestore_ && !fatalError_ &&
@@ -438,22 +533,6 @@ private:
         pendingReaction_ = ReactionType::NONE;
     }
 
-    void updateListeningNod(uint32_t nowMs)
-    {
-        if (stateMachine_.state() != ListenerState::LISTENING ||
-            headPetController_.active() || motionController_.isBusy() ||
-            motionController_.isMicrophoneSuppressed(nowMs) ||
-            !elapsed(nowMs, lastListeningNodMs_,
-                     app_config::motion::kListeningNodIntervalMs)) {
-            return;
-        }
-
-        if (motionController_.listeningNod(nowMs)) {
-            lastListeningNodMs_ = nowMs;
-            Serial.println("[Listening] small nod during speech");
-        }
-    }
-
     FaceExpression expressionForState() const
     {
         if (headPetController_.active()) {
@@ -521,9 +600,13 @@ private:
 
         switch (state) {
             case ListenerState::SPEECH_CANDIDATE:
+                setLed(0, 8, 1);
+                break;
             case ListenerState::LISTENING:
-            case ListenerState::END_CANDIDATE:
                 setLed(0, 26, 2);
+                break;
+            case ListenerState::END_CANDIDATE:
+                setLed(0, 8, 1);
                 break;
             default:
                 setLed(0, 0, 0);
@@ -568,9 +651,17 @@ private:
 
     ListenerState lastLedState_{ListenerState::STARTUP};
     int pitchBeforePet_{app_config::motion::kHomePitch};
+    int screenYawTarget_{app_config::motion::kHomeYaw};
     uint32_t touchStartedMs_{0};
+    uint32_t screenLookStartedMs_{0};
+    int16_t touchStartedX_{0};
     bool touching_{false};
     bool longPressHandled_{false};
+    bool touchStartedInDebugCorner_{false};
+    bool touchStartedInCalibrationArea_{false};
+    bool screenLookActive_{false};
+    bool screenBoopRequested_{false};
+    bool physicalPetSession_{false};
     bool manualCalibrationUi_{false};
     bool pendingManualCalibration_{false};
     bool calibrationUiActive_{false};
@@ -582,11 +673,11 @@ private:
     uint8_t startupGuidePage_{0};
     bool fatalError_{false};
     bool pendingPetRestore_{false};
+    bool pendingPetMotion_{false};
     bool petMotionUsed_{false};
     ReactionType pendingReaction_{ReactionType::NONE};
     ReactionType lastStartedReaction_{ReactionType::NONE};
     EndNodPlan pendingNodPlan_{};
-    uint32_t lastListeningNodMs_{0};
     bool lastLedPetting_{false};
 };
 

@@ -24,10 +24,10 @@ EndNodPlan EndNodPlanner::next(const EndNodRandomValues& randomValues)
     const uint32_t depthRoll = mapToRange(randomValues.depth, 0, 99);
     if (depthRoll < 35) {
         plan.targetPitch = static_cast<int>(
-            mapToRange(randomValues.target, 110, 130));
+            mapToRange(randomValues.target, 90, 110));
     } else if (depthRoll < 80) {
         plan.targetPitch = static_cast<int>(
-            mapToRange(randomValues.target, 80, 100));
+            mapToRange(randomValues.target, 70, 90));
     } else {
         plan.targetPitch = static_cast<int>(
             mapToRange(randomValues.target, 50, 70));
@@ -36,20 +36,20 @@ EndNodPlan EndNodPlanner::next(const EndNodRandomValues& randomValues)
     // 公式推奨範囲の下限に近い深いうなずきは、負荷を抑えて1回だけにする。
     plan.count = plan.targetPitch <= 70
                      ? 1
-                     : (mapToRange(randomValues.count, 0, 99) < 38 ? 2 : 1);
+                     : (mapToRange(randomValues.count, 0, 99) < 45 ? 2 : 1);
     plan.downSpeed = static_cast<int>(mapToRange(
-        randomValues.downSpeed, 185, plan.targetPitch <= 70 ? 200 : 215));
+        randomValues.downSpeed, 195, plan.targetPitch <= 70 ? 210 : 225));
     plan.returnSpeed = static_cast<int>(
-        mapToRange(randomValues.returnSpeed, 165, 190));
+        mapToRange(randomValues.returnSpeed, 175, 200));
     if (plan.returnSpeed >= plan.downSpeed) {
         plan.returnSpeed = plan.downSpeed - 10;
     }
-    plan.downHoldMs = mapToRange(randomValues.downHold, 300, 450);
-    plan.betweenHoldMs = mapToRange(randomValues.betweenHold, 330, 450);
-    plan.finalHoldMs = mapToRange(randomValues.finalHold, 550, 750);
+    plan.downHoldMs = mapToRange(randomValues.downHold, 300, 420);
+    plan.betweenHoldMs = mapToRange(randomValues.betweenHold, 420, 540);
+    plan.finalHoldMs = mapToRange(randomValues.finalHold, 480, 650);
 
     if (hasLastPlan_ && samePlan(plan, lastPlan_)) {
-        const int maximumDownSpeed = plan.targetPitch <= 70 ? 200 : 215;
+        const int maximumDownSpeed = plan.targetPitch <= 70 ? 210 : 225;
         plan.downSpeed = plan.downSpeed >= maximumDownSpeed
                              ? plan.downSpeed - 1
                              : plan.downSpeed + 1;
@@ -63,13 +63,13 @@ bool EndNodPlanner::isSafe(const EndNodPlan& plan)
 {
     const bool deep = plan.targetPitch <= 70;
     return (plan.count == 1 || plan.count == 2) &&
-           plan.targetPitch >= 50 && plan.targetPitch <= 130 &&
+           plan.targetPitch >= 50 && plan.targetPitch <= 110 &&
            (!deep || plan.count == 1) &&
-           plan.downSpeed >= 185 &&
-           plan.downSpeed <= (deep ? 200 : 215) &&
-           plan.returnSpeed >= 165 && plan.returnSpeed <= 190 &&
+           plan.downSpeed >= 195 &&
+           plan.downSpeed <= (deep ? 210 : 225) &&
+           plan.returnSpeed >= 175 && plan.returnSpeed <= 200 &&
            plan.returnSpeed < plan.downSpeed &&
-           plan.downHoldMs >= 300 && plan.downHoldMs <= 450 &&
-           plan.betweenHoldMs >= 330 && plan.betweenHoldMs <= 450 &&
-           plan.finalHoldMs >= 550 && plan.finalHoldMs <= 750;
+           plan.downHoldMs >= 300 && plan.downHoldMs <= 420 &&
+           plan.betweenHoldMs >= 420 && plan.betweenHoldMs <= 540 &&
+           plan.finalHoldMs >= 480 && plan.finalHoldMs <= 650;
 }

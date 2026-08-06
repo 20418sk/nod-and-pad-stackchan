@@ -94,17 +94,6 @@ void MotionController::update(uint32_t nowMs)
     }
 }
 
-bool MotionController::listeningNod(uint32_t nowMs)
-{
-    const MotionStep sequence[] = {
-        {app_config::motion::kHomePitch - app_config::motion::kListeningNodDepth,
-         180, app_config::motion::kListeningNodSpeed},
-        {app_config::motion::kHomePitch, 360,
-         app_config::motion::kListeningNodSpeed},
-    };
-    return startSequence(sequence, 2, nowMs);
-}
-
 bool MotionController::endNod(const EndNodPlan& plan, uint32_t nowMs)
 {
     const int safeTarget = clampPitch(plan.targetPitch);
@@ -141,6 +130,49 @@ bool MotionController::restorePitch(int pitchAngle, uint32_t nowMs)
 bool MotionController::moveHome(uint32_t nowMs)
 {
     return moveHomeAtSpeed(app_config::motion::kHomeSpeed, 1000, nowMs);
+}
+
+bool MotionController::settleToHome(uint32_t nowMs)
+{
+    if (failed_ || isBusy()) {
+        return false;
+    }
+
+    const int currentPitch = M5StackChan.Motion.getCurrentYAngle();
+    const int currentYaw = M5StackChan.Motion.getCurrentXAngle();
+    const bool alreadyHome =
+        std::abs(currentPitch - app_config::motion::kHomePitch) <=
+            app_config::motion::kServoVerificationTolerance &&
+        std::abs(currentYaw - app_config::motion::kHomeYaw) <=
+            app_config::motion::kYawVerificationTolerance;
+    if (alreadyHome) {
+        return true;
+    }
+
+    return startPoseMove(app_config::motion::kHomeYaw,
+                         app_config::motion::kHomePitch,
+                         app_config::motion::kReadyPoseSpeed,
+                         app_config::motion::kReadyPoseMoveMs,
+                         app_config::motion::kServoSoundSuppressionAfterMs,
+                         nowMs);
+}
+
+bool MotionController::lookTowardScreenTouch(int yawAngle, uint32_t nowMs)
+{
+    return startYawMove(yawAngle,
+                        app_config::motion::kScreenTouchYawSpeed,
+                        app_config::motion::kScreenTouchYawMoveMs,
+                        app_config::motion::kServoSoundSuppressionAfterMs,
+                        nowMs);
+}
+
+bool MotionController::returnYawHome(uint32_t nowMs)
+{
+    return startYawMove(app_config::motion::kHomeYaw,
+                        app_config::motion::kScreenTouchYawReturnSpeed,
+                        app_config::motion::kScreenTouchYawReturnMs,
+                        app_config::motion::kServoSoundSuppressionAfterMs,
+                        nowMs);
 }
 
 bool MotionController::moveHomeAtSpeed(int speed, uint32_t moveDurationMs,
@@ -233,6 +265,24 @@ bool MotionController::startPoseMove(int yawAngle, int pitchAngle, int speed,
     yawBusy_ = true;
     commandCurrentStep();
     commandYawSafely(yawAngle, speed);
+    return true;
+}
+
+bool MotionController::startYawMove(int yawAngle, int speed,
+                                    uint32_t moveDurationMs,
+                                    uint32_t suppressionAfterMs,
+                                    uint32_t nowMs)
+{
+    if (failed_ || isBusy() || moveDurationMs == 0) {
+        return false;
+    }
+
+    commandYawSafely(yawAngle, speed);
+    yawMoveStartedMs_ = nowMs;
+    yawMoveDurationMs_ = moveDurationMs;
+    suppressionStartedMs_ = nowMs;
+    suppressionDurationMs_ = moveDurationMs + suppressionAfterMs;
+    yawBusy_ = true;
     return true;
 }
 

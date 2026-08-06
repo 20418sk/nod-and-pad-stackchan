@@ -55,8 +55,8 @@ constexpr uint32_t kSleepAfterSilenceMs = 60000;
 namespace motion {
 constexpr int kOfficialYawMin = -1280;
 constexpr int kOfficialYawMax = 1280;
-constexpr int kWorkYawMin = -150;
-constexpr int kWorkYawMax = 150;
+constexpr int kWorkYawMin = -450;
+constexpr int kWorkYawMax = 450;
 constexpr int kHomeYaw = 0;
 
 constexpr int kOfficialPitchMin = 50;
@@ -66,15 +66,21 @@ constexpr int kWorkPitchMax = 720;
 constexpr int kHomePitch = 200;
 constexpr int kSleepPitch = 80;
 
-constexpr int kListeningNodDepth = 32;
 constexpr int kHeadPetRise = 70;
 
 constexpr int kHomeSpeed = 150;
-constexpr int kListeningNodSpeed = 140;
+constexpr int kReadyPoseSpeed = 70;
 constexpr int kHeadPetSpeed = 170;
+constexpr int kScreenTouchYawStep = 70;
+constexpr int kScreenTouchYawMax = 450;
+constexpr int kScreenTouchYawSpeed = 120;
+constexpr int kScreenTouchYawReturnSpeed = 90;
 
 constexpr uint32_t kServoSoundSuppressionAfterMs = 650;
-constexpr uint32_t kListeningNodIntervalMs = 1600;
+constexpr uint32_t kReadyPoseMoveMs = 2200;
+constexpr uint32_t kScreenTouchYawMoveMs = 520;
+constexpr uint32_t kScreenTouchLookDurationMs = 3200;
+constexpr uint32_t kScreenTouchYawReturnMs = 1800;
 constexpr uint32_t kServoVerificationTimeoutMs = 4200;
 constexpr uint32_t kServoVerificationPollMs = 100;
 constexpr int kServoVerificationTolerance = 80;
@@ -84,6 +90,8 @@ constexpr int kYawVerificationTolerance = 80;
 namespace touch {
 constexpr uint32_t kDebounceMs = 40;
 constexpr uint32_t kLongPressMs = 1200;
+constexpr uint32_t kShortTapMaximumMs = 700;
+constexpr uint32_t kDebugLongPressMs = 2000;
 }  // namespace touch
 
 namespace head_pet {
@@ -133,5 +141,9 @@ static_assert(motion::kWorkYawMin >= motion::kOfficialYawMin &&
 static_assert(motion::kHomeYaw >= motion::kWorkYawMin &&
                   motion::kHomeYaw <= motion::kWorkYawMax,
               "Home yaw must stay in the working range");
+static_assert(motion::kScreenTouchYawStep > 0 &&
+                  motion::kScreenTouchYawMax <= motion::kWorkYawMax &&
+                  -motion::kScreenTouchYawMax >= motion::kWorkYawMin,
+              "Screen touch yaw must stay in the working range");
 
 }  // namespace app_config

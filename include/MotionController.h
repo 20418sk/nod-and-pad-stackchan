@@ -10,11 +10,13 @@ public:
     void begin(uint32_t nowMs);
     void update(uint32_t nowMs);
 
-    bool listeningNod(uint32_t nowMs);
     bool endNod(const EndNodPlan& plan, uint32_t nowMs);
     bool headPetMotion(uint32_t nowMs);
     bool restorePitch(int pitchAngle, uint32_t nowMs);
     bool moveHome(uint32_t nowMs);
+    bool settleToHome(uint32_t nowMs);
+    bool lookTowardScreenTouch(int yawAngle, uint32_t nowMs);
+    bool returnYawHome(uint32_t nowMs);
     bool sleepPose(uint32_t nowMs);
 
     int currentPitch() const;
@@ -40,6 +42,8 @@ private:
     bool startPoseMove(int yawAngle, int pitchAngle, int speed,
                        uint32_t moveDurationMs,
                        uint32_t suppressionAfterMs, uint32_t nowMs);
+    bool startYawMove(int yawAngle, int speed, uint32_t moveDurationMs,
+                      uint32_t suppressionAfterMs, uint32_t nowMs);
     void commandCurrentStep();
     void commandPitchSafely(int pitchAngle, int speed);
     void commandYawSafely(int yawAngle, int speed);

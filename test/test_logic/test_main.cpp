@@ -7,6 +7,7 @@
 #include "HeadPetGestureDetector.h"
 #include "HeadTouchAudioGuard.h"
 #include "ListenerStateMachine.h"
+#include "ScreenTouchMapper.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -216,6 +217,18 @@ void test_deep_end_nod_is_always_single()
     TEST_ASSERT_EQUAL_UINT8(1, plan.count);
 }
 
+void test_shallow_end_nod_can_be_two_distinct_nods()
+{
+    EndNodPlanner planner;
+    EndNodRandomValues values{};
+    values.depth = 0;
+    values.count = 0;
+    const EndNodPlan plan = planner.next(values);
+    TEST_ASSERT_GREATER_OR_EQUAL_INT(90, plan.targetPitch);
+    TEST_ASSERT_EQUAL_UINT8(2, plan.count);
+    TEST_ASSERT_GREATER_OR_EQUAL_UINT32(420, plan.betweenHoldMs);
+}
+
 void test_identical_random_input_does_not_repeat_exact_plan()
 {
     EndNodPlanner planner;
@@ -260,6 +273,58 @@ void test_head_touch_audio_guard_covers_contact_tail()
     TEST_ASSERT_FALSE(guard.suppressed());
 }
 
+void test_screen_touch_regions_and_long_press_areas()
+{
+    TEST_ASSERT_EQUAL_INT(70, app_config::motion::kScreenTouchYawStep);
+    TEST_ASSERT_EQUAL_INT(450, app_config::motion::kScreenTouchYawMax);
+    TEST_ASSERT_GREATER_OR_EQUAL_INT(
+        app_config::motion::kScreenTouchYawMax,
+        app_config::motion::kWorkYawMax);
+    TEST_ASSERT_LESS_OR_EQUAL_INT(
+        app_config::motion::kOfficialYawMax,
+        app_config::motion::kWorkYawMax);
+
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(ScreenTouchRegion::LEFT),
+                          static_cast<int>(
+                              ScreenTouchMapper::horizontalRegion(105, 320)));
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(ScreenTouchRegion::CENTER),
+                          static_cast<int>(
+                              ScreenTouchMapper::horizontalRegion(106, 320)));
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(ScreenTouchRegion::CENTER),
+                          static_cast<int>(
+                              ScreenTouchMapper::horizontalRegion(212, 320)));
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(ScreenTouchRegion::RIGHT),
+                          static_cast<int>(
+                              ScreenTouchMapper::horizontalRegion(213, 320)));
+
+    TEST_ASSERT_TRUE(ScreenTouchMapper::isDebugCorner(300, 20, 320, 240));
+    TEST_ASSERT_FALSE(ScreenTouchMapper::isDebugCorner(250, 20, 320, 240));
+    TEST_ASSERT_FALSE(ScreenTouchMapper::isDebugCorner(300, 70, 320, 240));
+
+    TEST_ASSERT_TRUE(
+        ScreenTouchMapper::isCalibrationArea(160, 120, 320, 240));
+    TEST_ASSERT_FALSE(
+        ScreenTouchMapper::isCalibrationArea(20, 120, 320, 240));
+    TEST_ASSERT_FALSE(
+        ScreenTouchMapper::isCalibrationArea(160, 20, 320, 240));
+
+    TEST_ASSERT_EQUAL_INT(
+        70, ScreenTouchMapper::steppedYawTarget(
+                0, ScreenTouchRegion::LEFT, 70, 450));
+    TEST_ASSERT_EQUAL_INT(
+        140, ScreenTouchMapper::steppedYawTarget(
+                 70, ScreenTouchRegion::LEFT, 70, 450));
+    TEST_ASSERT_EQUAL_INT(
+        0, ScreenTouchMapper::steppedYawTarget(
+               70, ScreenTouchRegion::RIGHT, 70, 450));
+    TEST_ASSERT_EQUAL_INT(
+        450, ScreenTouchMapper::steppedYawTarget(
+                 420, ScreenTouchRegion::LEFT, 70, 450));
+    TEST_ASSERT_EQUAL_INT(
+        -450, ScreenTouchMapper::steppedYawTarget(
+                  -420, ScreenTouchRegion::RIGHT, 70, 450));
+}
+
 }  // namespace
 
 void setUp() {}
@@ -278,9 +343,11 @@ int main(int, char**)
     RUN_TEST(test_audio_direction_rejects_silence);
     RUN_TEST(test_end_nod_plans_stay_in_safe_ranges);
     RUN_TEST(test_deep_end_nod_is_always_single);
+    RUN_TEST(test_shallow_end_nod_can_be_two_distinct_nods);
     RUN_TEST(test_identical_random_input_does_not_repeat_exact_plan);
     RUN_TEST(test_head_pet_restores_after_release_delay);
     RUN_TEST(test_head_pet_accepts_swipe_and_single_tap);
     RUN_TEST(test_head_touch_audio_guard_covers_contact_tail);
+    RUN_TEST(test_screen_touch_regions_and_long_press_areas);
     return UNITY_END();
 }
