@@ -1,0 +1,666 @@
+#include <Arduino.h>
+#include <M5StackChan.h>
+#include <esp_system.h>
+
+#include "AppConfig.h"
+#include "AudioDetector.h"
+#include "FaceRenderer.h"
+#include "HeadPetController.h"
+#include "HeadPetGestureDetector.h"
+#include "HeadTouchAudioGuard.h"
+#include "ListenerStateMachine.h"
+#include "MotionController.h"
+#include "SoundDirectionTracker.h"
+
+namespace {
+
+class Application {
+public:
+    void begin()
+    {
+        Serial.begin(115200);
+        Serial.println("\n[きいてるチャン] 起動します");
+
+        // StackChan-BSP::begin()の実装内でM5Unified（M5.begin）も初期化される。
+        M5StackChan.begin();
+
+        const uint32_t nowMs = millis();
+        const bool displayOk = faceRenderer_.begin(M5StackChan.Display());
+        stateMachine_.begin(nowMs);
+
+        FaceDebugInfo initialDebug;
+        initialDebug.stateName = ListenerStateMachine::stateName(stateMachine_.state());
+        faceRenderer_.render(FaceExpression::NORMAL, initialDebug, nowMs, true);
+
+        const bool audioOk = audioDetector_.begin();
+        motionController_.begin(millis());
+        setLed(0, 0, 0);
+
+        if (!displayOk) {
+            setFatalError("画面エラー");
+        } else if (!audioOk) {
+            setFatalError("マイクエラー");
+        }
+    }
+
+    void update()
+    {
+        M5StackChan.update();
+        const uint32_t nowMs = millis();
+
+        motionController_.update(nowMs);
+        tryStartPendingReaction(nowMs);
+        handleTouch(nowMs);
+        handleHeadPet(nowMs);
+
+        if (motionController_.failed() && !fatalError_) {
+            setFatalError("サーボエラー");
+        }
+
+        if (pendingManualCalibration_ && !fatalError_ &&
+            audioDetector_.healthy() && motionController_.isReady() &&
+            !motionController_.isBusy() &&
+            !headPetController_.active() &&
+            !headTouchAudioGuard_.suppressed() &&
+            !motionController_.isMicrophoneSuppressed(nowMs)) {
+            pendingManualCalibration_ = false;
+            audioDetector_.startCalibration(nowMs,
+                                            app_config::audio::kManualCalibrationMs);
+            Serial.println("[音] 再キャリブレーション開始");
+        }
+
+        // 起動時のホーム移動音を環境ノイズとして学習しない。サーボがホームへ
+        // 到達し、動作後の抑制期間も終わってから静かな音だけで初期較正する。
+        if (!startupCalibrationStarted_ && !fatalError_ &&
+            audioDetector_.healthy() &&
+            motionController_.isReady() &&
+            !headPetController_.active() &&
+            !headTouchAudioGuard_.suppressed() &&
+            !motionController_.isMicrophoneSuppressed(nowMs)) {
+            startupCalibrationStarted_ = true;
+            audioDetector_.startCalibration(nowMs,
+                                            app_config::audio::kStartupCalibrationMs);
+            Serial.println("[音] 起動時キャリブレーション開始");
+        }
+
+        const ListenerState currentState = stateMachine_.state();
+        const bool servoSuppressed =
+            motionController_.isMicrophoneSuppressed(nowMs);
+        const bool noiseLearningAllowed =
+            (currentState == ListenerState::IDLE || currentState == ListenerState::SLEEPING) &&
+            !servoSuppressed &&
+            !audioDetector_.isCalibrating() && !headPetController_.active() &&
+            !headTouchAudioGuard_.suppressed();
+        const bool directionEstimationAllowed =
+            !servoSuppressed && !motionController_.isBusy() &&
+            motionController_.isReady() && !audioDetector_.isCalibrating() &&
+            !headPetController_.active() &&
+            !headTouchAudioGuard_.suppressed();
+
+        const bool newAudioBlock = audioDetector_.update(
+            nowMs, noiseLearningAllowed, directionEstimationAllowed);
+        if (!audioDetector_.healthy() && !fatalError_) {
+            setFatalError("マイクエラー");
+        }
+
+        if (audioDetector_.takeCalibrationCompleted()) {
+            if (manualCalibrationUi_) {
+                manualCalibrationUi_ = false;
+                faceRenderer_.clearOverlay();
+                stateMachine_.resetToIdle(nowMs);
+                setLed(0, 0, 0);
+                Serial.println("[音] 再キャリブレーション完了");
+            } else {
+                Serial.println("[音] 起動時キャリブレーション完了");
+            }
+        }
+
+        if (fatalError_) {
+            // エラー中もBSP更新と安全なホーム移動の完了監視だけは継続する。
+            yield();
+            return;
+        }
+
+        const AudioMetrics& metrics = audioDetector_.metrics();
+        ListenerInput input;
+        input.sampleAvailable    = newAudioBlock;
+        input.audioReady         = audioDetector_.healthy() &&
+                                   !audioDetector_.isCalibrating() &&
+                                   motionController_.isReady();
+        input.audioHealthy       = audioDetector_.healthy();
+        input.detectionSuppressed = audioDetector_.isCalibrating() ||
+                                    motionController_.isMicrophoneSuppressed(nowMs) ||
+                                    headPetController_.active() ||
+                                    headTouchAudioGuard_.suppressed();
+        input.reactionComplete   = !motionController_.isBusy();
+        input.level              = metrics.smoothedLevel;
+        input.startThreshold     = metrics.startThreshold;
+        input.endThreshold       = metrics.endThreshold;
+        input.veryLoud           = metrics.veryLoud;
+
+        ListenerOutput output = stateMachine_.update(nowMs, input);
+        if (output.stateChanged &&
+            output.previousState == ListenerState::REACTING &&
+            output.state == ListenerState::COOLDOWN) {
+            if (lastStartedReaction_ == ReactionType::NORMAL_NOD) {
+                faceRenderer_.startNodAfterglow(nowMs);
+            }
+            lastStartedReaction_ = ReactionType::NONE;
+        }
+        if (output.stateChanged && output.state == ListenerState::LISTENING) {
+            lastListeningNodMs_ = nowMs;
+        }
+        updateListeningNod(nowMs);
+        updateSoundTracking(nowMs, newAudioBlock, input.detectionSuppressed);
+        if (!headPetController_.active()) {
+            handleListenerOutput(output, nowMs);
+        }
+        handleSoundReturn(nowMs);
+        const FaceExpression expression = expressionForState();
+        const FaceDebugInfo debugInfo = makeDebugInfo();
+        // 表情が同じ状態遷移では再描画しない。音量がしきい値付近を
+        // 往復しても、LCDを不要に全画面更新しないためのちらつき対策。
+        faceRenderer_.render(expression, debugInfo, nowMs);
+        updateLedForState();
+
+        if (output.stateChanged) {
+            Serial.printf("[状態] %s -> %s\n",
+                          ListenerStateMachine::stateName(output.previousState),
+                          ListenerStateMachine::stateName(stateMachine_.state()));
+        }
+    }
+
+private:
+    static bool elapsed(uint32_t nowMs, uint32_t sinceMs, uint32_t durationMs)
+    {
+        return static_cast<uint32_t>(nowMs - sinceMs) >= durationMs;
+    }
+
+    static uint32_t randomRange(uint32_t minimum, uint32_t maximum)
+    {
+        return minimum + (esp_random() % (maximum - minimum + 1U));
+    }
+
+    static bool sameNodPlan(const EndNodPlan& left, const EndNodPlan& right)
+    {
+        return left.count == right.count &&
+               left.targetPitch == right.targetPitch &&
+               left.downSpeed == right.downSpeed &&
+               left.returnSpeed == right.returnSpeed &&
+               left.downHoldMs == right.downHoldMs &&
+               left.betweenHoldMs == right.betweenHoldMs &&
+               left.finalHoldMs == right.finalHoldMs;
+    }
+
+    EndNodPlan randomEndNodPlan()
+    {
+        EndNodPlan plan;
+        const uint32_t depthRoll = randomRange(0, 99);
+        if (depthRoll < 35) {
+            plan.targetPitch = static_cast<int>(randomRange(110, 130));
+        } else if (depthRoll < 80) {
+            plan.targetPitch = static_cast<int>(randomRange(80, 100));
+        } else {
+            plan.targetPitch = static_cast<int>(randomRange(50, 70));
+        }
+
+        // 深い5～7度は1回だけ。それ以外は全体で約30%が2回になる比率。
+        plan.count = plan.targetPitch <= 70
+                         ? 1
+                         : (randomRange(0, 99) < 38 ? 2 : 1);
+        plan.downSpeed = static_cast<int>(
+            randomRange(185, plan.targetPitch <= 70 ? 200 : 215));
+        plan.returnSpeed = static_cast<int>(randomRange(165, 190));
+        if (plan.returnSpeed >= plan.downSpeed) {
+            plan.returnSpeed = plan.downSpeed - 10;
+        }
+        plan.downHoldMs = randomRange(300, 450);
+        plan.betweenHoldMs = randomRange(330, 450);
+        plan.finalHoldMs = randomRange(550, 750);
+
+        if (hasLastNodPlan_ && sameNodPlan(plan, lastNodPlan_)) {
+            const int maximumDownSpeed = plan.targetPitch <= 70 ? 200 : 215;
+            plan.downSpeed = plan.downSpeed >= maximumDownSpeed
+                                 ? plan.downSpeed - 1
+                                 : plan.downSpeed + 1;
+        }
+        lastNodPlan_ = plan;
+        hasLastNodPlan_ = true;
+        return plan;
+    }
+
+    void handleTouch(uint32_t nowMs)
+    {
+        int16_t touchX = 0;
+        int16_t touchY = 0;
+        const bool touching = M5StackChan.Display().getTouch(&touchX, &touchY);
+        (void)touchX;
+        (void)touchY;
+
+        if (touching && !touching_) {
+            touching_        = true;
+            longPressHandled_ = false;
+            touchStartedMs_   = nowMs;
+            return;
+        }
+
+        if (touching && touching_ && !longPressHandled_ &&
+            elapsed(nowMs, touchStartedMs_, app_config::touch::kLongPressMs)) {
+            longPressHandled_ = true;
+            if (!fatalError_ && !motionController_.isBusy() &&
+                audioDetector_.healthy() &&
+                !headPetController_.active() &&
+                stateMachine_.state() != ListenerState::STARTUP) {
+                const bool wasSleeping =
+                    stateMachine_.state() == ListenerState::SLEEPING;
+                stateMachine_.resetToIdle(nowMs);
+                manualCalibrationUi_ = true;
+                faceRenderer_.showCalibration();
+                setLed(0, 0, 5);
+
+                if (wasSleeping) {
+                    if (!motionController_.moveHome(nowMs)) {
+                        setFatalError("サーボエラー");
+                        return;
+                    }
+                }
+
+                if (motionController_.isMicrophoneSuppressed(nowMs)) {
+                    pendingManualCalibration_ = true;
+                    Serial.println("[音] サーボ静音待ち");
+                } else {
+                    audioDetector_.startCalibration(
+                        nowMs, app_config::audio::kManualCalibrationMs);
+                    Serial.println("[音] 再キャリブレーション開始");
+                }
+            }
+            return;
+        }
+
+        if (!touching && touching_) {
+            const uint32_t heldMs = static_cast<uint32_t>(nowMs - touchStartedMs_);
+            touching_ = false;
+            if (!longPressHandled_ && heldMs >= app_config::touch::kDebounceMs &&
+                !fatalError_ && !manualCalibrationUi_) {
+                faceRenderer_.setDebugEnabled(!faceRenderer_.debugEnabled());
+                faceRenderer_.render(expressionForState(), makeDebugInfo(), nowMs, true);
+                Serial.printf("[表示] デバッグ表示 %s\n",
+                              faceRenderer_.debugEnabled() ? "ON" : "OFF");
+            }
+        }
+    }
+
+    void handleHeadPet(uint32_t nowMs)
+    {
+        auto& touchSensor = M5StackChan.TouchSensor;
+        const auto intensities = touchSensor.getIntensities();
+        const bool swiped = headPetGestureDetector_.update(
+            nowMs, intensities);
+        const bool released = touchSensor.wasReleased();
+        const bool anyHeadTouch =
+            intensities[0] > 0 || intensities[1] > 0 || intensities[2] > 0;
+        if (headTouchAudioGuard_.update(nowMs, anyHeadTouch || released)) {
+            if (stateMachine_.state() != ListenerState::STARTUP) {
+                stateMachine_.resetToIdle(nowMs);
+            }
+            pendingReaction_ = ReactionType::NONE;
+            lastStartedReaction_ = ReactionType::NONE;
+            soundDirectionTracker_.endSession();
+            Serial.println("[頭部タッチ] 機械音の判定抑制を開始");
+        }
+        const bool acceptsNewSwipe = !fatalError_ && !manualCalibrationUi_ &&
+                                     audioDetector_.healthy() &&
+                                     motionController_.isReady();
+
+        const HeadPetUpdate petUpdate = headPetController_.update(
+            nowMs, acceptsNewSwipe && swiped, released);
+
+        if (petUpdate.entered) {
+            pitchBeforePet_ = motionController_.currentPitch();
+            pendingPetRestore_ = false;
+            petMotionUsed_ = false;
+            // 頭部を叩いた機械音を、なでなで終了後に発話として処理しない。
+            stateMachine_.resetToIdle(nowMs);
+            lastStartedReaction_ = ReactionType::NONE;
+        }
+
+        if (petUpdate.swipeAccepted) {
+            const HeadPetGestureType gestureType =
+                headPetGestureDetector_.lastGestureType();
+            faceRenderer_.setPettingTapStyle(
+                gestureType == HeadPetGestureType::SINGLE_TAP);
+            if (gestureType == HeadPetGestureType::SWIPE &&
+                !motionController_.isBusy()) {
+                // 動作中なら公式実装と同様に表情だけ反応し、サーボ命令は重ねない。
+                petMotionUsed_ = motionController_.headPetMotion(nowMs) ||
+                                 petMotionUsed_;
+            }
+            Serial.println(gestureType == HeadPetGestureType::SINGLE_TAP
+                               ? "[頭部タッチ] 1回タップを検出"
+                               : "[なでなで] 頭部スワイプを検出");
+        }
+
+        if (petUpdate.restored) {
+            pendingPetRestore_ = petMotionUsed_;
+            petMotionUsed_ = false;
+        }
+
+        if (pendingPetRestore_ && !fatalError_ &&
+            motionController_.isReady() && !motionController_.isBusy()) {
+            if (motionController_.restorePitch(pitchBeforePet_, nowMs)) {
+                pendingPetRestore_ = false;
+                Serial.println("[なでなで] 元の姿勢へ復帰");
+            }
+        }
+    }
+
+    void handleListenerOutput(const ListenerOutput& output, uint32_t nowMs)
+    {
+        if (output.wokeFromSleep) {
+            // 寝姿勢から安全ホームへ戻る間は音声判定を抑制し、起床のきっかけを
+            // そのまま発話として数えない。
+            if (!motionController_.moveHome(nowMs)) {
+                setFatalError("サーボエラー");
+                return;
+            }
+            stateMachine_.resetToIdle(nowMs);
+            return;
+        }
+
+        if (output.stateChanged && output.state == ListenerState::SLEEPING) {
+            if (!motionController_.sleepPose(nowMs)) {
+                setFatalError("サーボエラー");
+                return;
+            }
+        }
+
+        if (output.stateChanged && output.state == ListenerState::LISTENING) {
+            // 発話開始時は顔だけを切り替える。サーボを動かさないため、
+            // 短い声も自己音抑制で失わない。
+            const AudioDirectionEstimate& direction =
+                audioDetector_.metrics().direction;
+            Serial.printf("[方向] %s lag=%d corr=%.2f conf=%.2f\n",
+                          AudioDirectionEstimator::directionName(
+                              direction.direction),
+                          direction.lagSamples,
+                          static_cast<double>(direction.correlation),
+                          static_cast<double>(direction.confidence));
+        }
+
+        if (!output.reactionRequested) {
+            return;
+        }
+
+        pendingNodPlan_ = randomEndNodPlan();
+        Serial.printf("[反応] 発話=%lums 回数=%u 最下点=%.1f度 速度=%d/%d\n",
+                      static_cast<unsigned long>(output.completedSpeechMs),
+                      static_cast<unsigned>(pendingNodPlan_.count),
+                      static_cast<double>(pendingNodPlan_.targetPitch) / 10.0,
+                      pendingNodPlan_.downSpeed,
+                      pendingNodPlan_.returnSpeed);
+        pendingReaction_ = ReactionType::NORMAL_NOD;
+        tryStartPendingReaction(nowMs);
+    }
+
+    void tryStartPendingReaction(uint32_t nowMs)
+    {
+        if (pendingReaction_ == ReactionType::NONE ||
+            motionController_.isBusy() || headPetController_.active()) {
+            return;
+        }
+
+        bool started = false;
+        switch (pendingReaction_) {
+            case ReactionType::NORMAL_NOD:
+                started = motionController_.endNod(pendingNodPlan_, nowMs);
+                break;
+            case ReactionType::NONE:
+                break;
+        }
+
+        if (!started) {
+            setFatalError("サーボエラー");
+        } else {
+            lastStartedReaction_ = pendingReaction_;
+        }
+        pendingReaction_ = ReactionType::NONE;
+    }
+
+    void updateListeningNod(uint32_t nowMs)
+    {
+        if (stateMachine_.state() != ListenerState::LISTENING ||
+            headPetController_.active() || motionController_.isBusy() ||
+            motionController_.isMicrophoneSuppressed(nowMs) ||
+            !elapsed(nowMs, lastListeningNodMs_,
+                     app_config::motion::kListeningNodIntervalMs)) {
+            return;
+        }
+
+        if (motionController_.listeningNod(nowMs)) {
+            lastListeningNodMs_ = nowMs;
+            Serial.println("[Listening] small nod during speech");
+        }
+    }
+
+    static bool isSpeechTrackingState(ListenerState state)
+    {
+        return state == ListenerState::SPEECH_CANDIDATE ||
+               state == ListenerState::LISTENING ||
+               state == ListenerState::END_CANDIDATE;
+    }
+
+    void updateSoundTracking(uint32_t nowMs, bool newAudioBlock,
+                             bool detectionSuppressed)
+    {
+        if (!app_config::audio_direction::kEnableSoundServoTracking) {
+            soundDirectionTracker_.endSession();
+            return;
+        }
+
+        const ListenerState state = stateMachine_.state();
+        if (!isSpeechTrackingState(state) || headPetController_.active()) {
+            soundDirectionTracker_.endSession();
+            return;
+        }
+
+        soundDirectionTracker_.beginSession();
+        const AudioMetrics& metrics = audioDetector_.metrics();
+        const bool measurementAllowed =
+            !detectionSuppressed && motionController_.isReady() &&
+            !motionController_.isBusy();
+        // 自然な発話の短い音量低下は投票窓をリセットせず、単に無投票とする。
+        // サーボ・較正・なでなでによる抑制だけが途中の票を破棄する。
+        const bool voteSampleAvailable =
+            newAudioBlock && metrics.smoothedLevel >= metrics.endThreshold;
+        const SoundTrackingDecision decision = soundDirectionTracker_.update(
+            nowMs, voteSampleAvailable, measurementAllowed,
+            metrics.direction.direction);
+        if (!decision.turnRequested) {
+            return;
+        }
+
+        if (!motionController_.soundYaw(decision.targetYaw, nowMs,
+                                        decision.initialTurn)) {
+            setFatalError("サーボエラー");
+            return;
+        }
+        Serial.printf("[音追尾] %s -> yaw=%+.1f度 (%s)\n",
+                      AudioDirectionEstimator::directionName(
+                          decision.direction),
+                      static_cast<double>(decision.targetYaw) / 10.0,
+                      decision.initialTurn ? "初回" : "補正");
+    }
+
+    void handleSoundReturn(uint32_t nowMs)
+    {
+        if (!app_config::audio_direction::kEnableSoundServoTracking) {
+            return;
+        }
+
+        if (!soundDirectionTracker_.hasYawOffset() ||
+            isSpeechTrackingState(stateMachine_.state()) ||
+            stateMachine_.state() == ListenerState::REACTING ||
+            headPetController_.active() || manualCalibrationUi_ ||
+            audioDetector_.isCalibrating() || !motionController_.isReady() ||
+            motionController_.isBusy() ||
+            motionController_.isMicrophoneSuppressed(nowMs)) {
+            return;
+        }
+
+        const SoundTrackingDecision decision =
+            soundDirectionTracker_.requestReturnHome();
+        if (!decision.turnRequested) {
+            return;
+        }
+        if (!motionController_.returnYawHome(nowMs)) {
+            setFatalError("サーボエラー");
+            return;
+        }
+        Serial.println("[音追尾] 反応完了後、ゆっくり正面へ復帰");
+    }
+
+    FaceExpression expressionForState() const
+    {
+        if (headPetController_.active()) {
+            return (headPetController_.decorated() ||
+                    headPetGestureDetector_.contactActive())
+                       ? FaceExpression::PETTING
+                       : FaceExpression::NODDING;
+        }
+
+        switch (stateMachine_.state()) {
+            case ListenerState::STARTUP:
+            case ListenerState::IDLE:
+            case ListenerState::COOLDOWN:
+            case ListenerState::SPEECH_CANDIDATE:
+                return FaceExpression::NORMAL;
+            case ListenerState::LISTENING:
+            case ListenerState::END_CANDIDATE:
+                return FaceExpression::LISTENING;
+            case ListenerState::REACTING:
+                return FaceExpression::NODDING;
+            case ListenerState::SLEEPING:
+                return FaceExpression::SLEEPING;
+        }
+        return FaceExpression::ERROR;
+    }
+
+    FaceDebugInfo makeDebugInfo() const
+    {
+        const AudioMetrics& metrics = audioDetector_.metrics();
+        FaceDebugInfo info;
+        info.stateName        = ListenerStateMachine::stateName(stateMachine_.state());
+        info.directionName    = AudioDirectionEstimator::directionName(
+            metrics.direction.direction);
+        info.smoothedLevel    = metrics.smoothedLevel;
+        info.leftLevel        = metrics.leftRms;
+        info.rightLevel       = metrics.rightRms;
+        info.noiseFloor       = metrics.noiseFloor;
+        info.dynamicThreshold = metrics.startThreshold;
+        info.directionConfidence = metrics.direction.confidence;
+        info.directionLagSamples = metrics.direction.lagSamples;
+        info.yawTarget        = motionController_.currentYaw();
+        info.lastSpeechMs     = stateMachine_.lastSpeechDurationMs();
+        return info;
+    }
+
+    void updateLedForState()
+    {
+        if (manualCalibrationUi_) {
+            return;
+        }
+
+        const ListenerState state = stateMachine_.state();
+        const bool petting = headPetController_.active();
+        if (state == lastLedState_ && petting == lastLedPetting_) {
+            return;
+        }
+        lastLedState_   = state;
+        lastLedPetting_ = petting;
+
+        // 公式RGB例の168より十分低い範囲で、実機でも分かる差を付ける。
+        if (petting) {
+            setLed(16, 7, 8);
+            return;
+        }
+
+        switch (state) {
+            case ListenerState::SPEECH_CANDIDATE:
+            case ListenerState::LISTENING:
+            case ListenerState::END_CANDIDATE:
+                setLed(0, 26, 2);
+                break;
+            default:
+                setLed(0, 0, 0);
+                break;
+        }
+    }
+
+    void setLed(uint8_t red, uint8_t green, uint8_t blue)
+    {
+        // BSP実在API。値を低く抑え、常時高輝度にしない。
+        M5StackChan.showRgbColor(red, green, blue);
+    }
+
+    void setFatalError(const char* message)
+    {
+        if (fatalError_) {
+            return;
+        }
+        fatalError_ = true;
+        setLed(14, 0, 0);
+        faceRenderer_.clearOverlay();
+        faceRenderer_.showError(message);
+        Serial.printf("[致命的エラー] %s\n", message);
+    }
+
+    AudioDetector audioDetector_;
+    ListenerStateMachine stateMachine_;
+    MotionController motionController_;
+    SoundDirectionTracker soundDirectionTracker_;
+    FaceRenderer faceRenderer_;
+    HeadPetController headPetController_{
+        app_config::head_pet::kRestoreDelayMs,
+        app_config::head_pet::kDecorationDurationMs};
+    HeadPetGestureDetector headPetGestureDetector_{
+        app_config::head_pet::kGestureMinimumMoveMs,
+        app_config::head_pet::kGestureMaximumMs,
+        app_config::head_pet::kGestureReleaseResetMs,
+        app_config::head_pet::kTapMinimumContactMs,
+        app_config::head_pet::kTapMaximumContactMs};
+    HeadTouchAudioGuard headTouchAudioGuard_{
+        app_config::head_pet::kContactAudioSuppressionMs};
+
+    ListenerState lastLedState_{ListenerState::STARTUP};
+    int pitchBeforePet_{app_config::motion::kHomePitch};
+    uint32_t touchStartedMs_{0};
+    bool touching_{false};
+    bool longPressHandled_{false};
+    bool manualCalibrationUi_{false};
+    bool pendingManualCalibration_{false};
+    bool startupCalibrationStarted_{false};
+    bool fatalError_{false};
+    bool pendingPetRestore_{false};
+    bool petMotionUsed_{false};
+    ReactionType pendingReaction_{ReactionType::NONE};
+    ReactionType lastStartedReaction_{ReactionType::NONE};
+    EndNodPlan pendingNodPlan_{};
+    EndNodPlan lastNodPlan_{};
+    bool hasLastNodPlan_{false};
+    uint32_t lastListeningNodMs_{0};
+    bool lastLedPetting_{false};
+};
+
+Application application;
+
+}  // namespace
+
+void setup()
+{
+    application.begin();
+}
+
+void loop()
+{
+    application.update();
+}

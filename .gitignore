@@ -1,0 +1,11 @@
+.pio/
+.venv/
+.venv313/
+.research/
+.tools/
+.python313/
+*.obj
+*.exe
+.vscode/
+managed_components/
+sdkconfig.stackchan_k151_face_diag
