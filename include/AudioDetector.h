@@ -14,9 +14,7 @@ struct AudioMetrics {
     float noiseFloor{app_config::audio::kInitialNoiseFloor};
     float startThreshold{0.0F};
     float endThreshold{0.0F};
-    float veryLoudThreshold{0.0F};
     AudioDirectionEstimate direction{};
-    bool veryLoud{false};
 };
 
 class AudioDetector {

@@ -110,27 +110,6 @@ bool MotionController::headPetMotion(uint32_t nowMs)
     return startSequence(sequence, 1, nowMs);
 }
 
-bool MotionController::soundYaw(int yawAngle, uint32_t nowMs,
-                                bool initialTurn)
-{
-    return startYawMove(
-        yawAngle,
-        initialTurn ? app_config::motion::kSoundYawInitialSpeed
-                    : app_config::motion::kSoundYawCorrectionSpeed,
-        initialTurn ? app_config::motion::kSoundYawInitialMoveMs
-                    : app_config::motion::kSoundYawCorrectionMoveMs,
-        app_config::motion::kSoundYawSuppressionAfterMs, nowMs);
-}
-
-bool MotionController::returnYawHome(uint32_t nowMs)
-{
-    return startYawMove(app_config::motion::kHomeYaw,
-                        app_config::motion::kSoundYawReturnSpeed,
-                        app_config::motion::kSoundYawReturnMoveMs,
-                        app_config::motion::kServoSoundSuppressionAfterMs,
-                        nowMs);
-}
-
 bool MotionController::restorePitch(int pitchAngle, uint32_t nowMs)
 {
     const MotionStep sequence[] = {
@@ -204,24 +183,6 @@ bool MotionController::startSequence(const MotionStep* steps, std::size_t count,
     suppressionDurationMs_  = totalDuration + afterMs;
     busy_                   = true;
     commandCurrentStep();
-    return true;
-}
-
-bool MotionController::startYawMove(int yawAngle, int speed,
-                                    uint32_t moveDurationMs,
-                                    uint32_t suppressionAfterMs,
-                                    uint32_t nowMs)
-{
-    if (failed_ || isBusy() || moveDurationMs == 0) {
-        return false;
-    }
-
-    commandYawSafely(yawAngle, speed);
-    yawMoveStartedMs_ = nowMs;
-    yawMoveDurationMs_ = moveDurationMs;
-    suppressionStartedMs_ = nowMs;
-    suppressionDurationMs_ = moveDurationMs + suppressionAfterMs;
-    yawBusy_ = true;
     return true;
 }
 

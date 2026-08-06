@@ -3,15 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
-struct EndNodPlan {
-    uint8_t count{1};
-    int targetPitch{120};
-    int downSpeed{180};
-    int returnSpeed{150};
-    uint32_t downHoldMs{500};
-    uint32_t betweenHoldMs{500};
-    uint32_t finalHoldMs{850};
-};
+#include "EndNodPlanner.h"
 
 class MotionController {
 public:
@@ -21,8 +13,6 @@ public:
     bool listeningNod(uint32_t nowMs);
     bool endNod(const EndNodPlan& plan, uint32_t nowMs);
     bool headPetMotion(uint32_t nowMs);
-    bool soundYaw(int yawAngle, uint32_t nowMs, bool initialTurn);
-    bool returnYawHome(uint32_t nowMs);
     bool restorePitch(int pitchAngle, uint32_t nowMs);
     bool moveHome(uint32_t nowMs);
     bool sleepPose(uint32_t nowMs);
@@ -45,8 +35,6 @@ private:
     bool startSequence(const MotionStep* steps, std::size_t count,
                        uint32_t nowMs,
                        uint32_t suppressionAfterMs = 0);
-    bool startYawMove(int yawAngle, int speed, uint32_t moveDurationMs,
-                      uint32_t suppressionAfterMs, uint32_t nowMs);
     bool startPoseMove(int yawAngle, int pitchAngle, int speed,
                        uint32_t moveDurationMs,
                        uint32_t suppressionAfterMs, uint32_t nowMs);

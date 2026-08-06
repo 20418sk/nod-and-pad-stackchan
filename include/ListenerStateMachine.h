@@ -27,7 +27,6 @@ struct ListenerInput {
     float level{0.0F};
     float startThreshold{0.0F};
     float endThreshold{0.0F};
-    bool veryLoud{false};
 };
 
 struct ListenerOutput {
@@ -50,13 +49,12 @@ public:
     ReactionType activeReaction() const { return activeReaction_; }
     uint32_t lastSpeechDurationMs() const { return lastSpeechDurationMs_; }
 
-    static ReactionType classifySpeech(uint32_t durationMs, bool veryLoud);
+    static ReactionType classifySpeech(uint32_t durationMs);
     static const char* stateName(ListenerState state);
     static bool elapsed(uint32_t nowMs, uint32_t sinceMs, uint32_t durationMs);
 
 private:
     void transitionTo(ListenerState next, uint32_t nowMs, ListenerOutput& output);
-    void updatePeak(const ListenerInput& input);
 
     ListenerState state_{ListenerState::STARTUP};
     ReactionType activeReaction_{ReactionType::NONE};
@@ -68,5 +66,4 @@ private:
     uint32_t lastReactionMs_{0};
     uint32_t lastSpeechDurationMs_{0};
     bool hasReacted_{false};
-    bool veryLoudSeen_{false};
 };

@@ -19,7 +19,6 @@ void ListenerStateMachine::begin(uint32_t nowMs)
     lastReactionMs_       = nowMs;
     lastSpeechDurationMs_ = 0;
     hasReacted_           = false;
-    veryLoudSeen_         = false;
 }
 
 void ListenerStateMachine::resetToIdle(uint32_t nowMs)
@@ -31,7 +30,6 @@ void ListenerStateMachine::resetToIdle(uint32_t nowMs)
     speechStartedMs_     = nowMs;
     endCandidateSinceMs_ = nowMs;
     lastActivityMs_      = nowMs;
-    veryLoudSeen_        = false;
 }
 
 void ListenerStateMachine::transitionTo(ListenerState next, uint32_t nowMs,
@@ -47,15 +45,9 @@ void ListenerStateMachine::transitionTo(ListenerState next, uint32_t nowMs,
     output.state         = state_;
 }
 
-void ListenerStateMachine::updatePeak(const ListenerInput& input)
-{
-    veryLoudSeen_ = veryLoudSeen_ || input.veryLoud;
-}
-
-ReactionType ListenerStateMachine::classifySpeech(uint32_t durationMs, bool veryLoud)
+ReactionType ListenerStateMachine::classifySpeech(uint32_t durationMs)
 {
     using namespace app_config::listener;
-    (void)veryLoud;
     if (durationMs < kMinimumSpeechMs) {
         return ReactionType::NONE;
     }
@@ -116,7 +108,6 @@ ListenerOutput ListenerStateMachine::update(uint32_t nowMs, const ListenerInput&
                 const bool wasSleeping = state_ == ListenerState::SLEEPING;
                 candidateSinceMs_ = nowMs;
                 lastActivityMs_   = nowMs;
-                veryLoudSeen_     = input.veryLoud;
                 transitionTo(ListenerState::SPEECH_CANDIDATE, nowMs, output);
                 output.wokeFromSleep = wasSleeping;
             }
@@ -124,10 +115,8 @@ ListenerOutput ListenerStateMachine::update(uint32_t nowMs, const ListenerInput&
 
         case ListenerState::SPEECH_CANDIDATE:
             if (input.level < input.startThreshold) {
-                veryLoudSeen_ = false;
                 transitionTo(ListenerState::IDLE, nowMs, output);
             } else {
-                updatePeak(input);
                 lastActivityMs_ = nowMs;
                 if (elapsed(nowMs, candidateSinceMs_, kSpeechStartHoldMs)) {
                     speechStartedMs_ = candidateSinceMs_;
@@ -137,7 +126,6 @@ ListenerOutput ListenerStateMachine::update(uint32_t nowMs, const ListenerInput&
             break;
 
         case ListenerState::LISTENING:
-            updatePeak(input);
             lastActivityMs_ = nowMs;
             if (input.level < input.endThreshold) {
                 endCandidateSinceMs_ = nowMs;
@@ -147,7 +135,6 @@ ListenerOutput ListenerStateMachine::update(uint32_t nowMs, const ListenerInput&
 
         case ListenerState::END_CANDIDATE:
             if (input.level >= input.endThreshold) {
-                updatePeak(input);
                 lastActivityMs_ = nowMs;
                 transitionTo(ListenerState::LISTENING, nowMs, output);
             } else if (elapsed(nowMs, endCandidateSinceMs_, kSpeechEndHoldMs)) {
@@ -156,13 +143,12 @@ ListenerOutput ListenerStateMachine::update(uint32_t nowMs, const ListenerInput&
                 lastActivityMs_ = nowMs;
 
                 const ReactionType reaction =
-                    classifySpeech(lastSpeechDurationMs_, veryLoudSeen_);
+                    classifySpeech(lastSpeechDurationMs_);
                 const bool intervalReady =
                     !hasReacted_ ||
                     elapsed(nowMs, lastReactionMs_,
                             kMinimumReactionIntervalMs);
 
-                veryLoudSeen_ = false;
                 if (reaction == ReactionType::NONE || !intervalReady) {
                     transitionTo(ListenerState::COOLDOWN, nowMs, output);
                 } else {

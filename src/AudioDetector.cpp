@@ -155,7 +155,6 @@ void AudioDetector::processBlock(const int16_t* samples,
     }
 
     updateThresholds();
-    metrics_.veryLoud = metrics_.rawRms >= metrics_.veryLoudThreshold;
 }
 
 void AudioDetector::updateThresholds()
@@ -168,9 +167,6 @@ void AudioDetector::updateThresholds()
     const float endByMargin = metrics_.noiseFloor + app_config::audio::kEndThresholdMargin;
     metrics_.endThreshold = endByRatio > endByMargin ? endByRatio : endByMargin;
 
-    const float loudByRatio = metrics_.noiseFloor * app_config::audio::kVeryLoudRatio;
-    const float loudByMargin = metrics_.noiseFloor + app_config::audio::kVeryLoudMargin;
-    metrics_.veryLoudThreshold = loudByRatio > loudByMargin ? loudByRatio : loudByMargin;
 }
 
 void AudioDetector::startCalibration(uint32_t nowMs, uint32_t durationMs)

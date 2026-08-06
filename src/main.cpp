@@ -4,13 +4,13 @@
 
 #include "AppConfig.h"
 #include "AudioDetector.h"
+#include "EndNodPlanner.h"
 #include "FaceRenderer.h"
 #include "HeadPetController.h"
 #include "HeadPetGestureDetector.h"
 #include "HeadTouchAudioGuard.h"
 #include "ListenerStateMachine.h"
 #include "MotionController.h"
-#include "SoundDirectionTracker.h"
 
 namespace {
 
@@ -19,7 +19,7 @@ public:
     void begin()
     {
         Serial.begin(115200);
-        Serial.println("\n[きいてるチャン] 起動します");
+        Serial.println("\n[Nodding StackChan] 起動します");
 
         // StackChan-BSP::begin()の実装内でM5Unified（M5.begin）も初期化される。
         M5StackChan.begin();
@@ -136,7 +136,6 @@ public:
         input.level              = metrics.smoothedLevel;
         input.startThreshold     = metrics.startThreshold;
         input.endThreshold       = metrics.endThreshold;
-        input.veryLoud           = metrics.veryLoud;
 
         ListenerOutput output = stateMachine_.update(nowMs, input);
         if (output.stateChanged &&
@@ -151,11 +150,9 @@ public:
             lastListeningNodMs_ = nowMs;
         }
         updateListeningNod(nowMs);
-        updateSoundTracking(nowMs, newAudioBlock, input.detectionSuppressed);
         if (!headPetController_.active()) {
             handleListenerOutput(output, nowMs);
         }
-        handleSoundReturn(nowMs);
         const FaceExpression expression = expressionForState();
         const FaceDebugInfo debugInfo = makeDebugInfo();
         // 表情が同じ状態遷移では再描画しない。音量がしきい値付近を
@@ -176,57 +173,12 @@ private:
         return static_cast<uint32_t>(nowMs - sinceMs) >= durationMs;
     }
 
-    static uint32_t randomRange(uint32_t minimum, uint32_t maximum)
-    {
-        return minimum + (esp_random() % (maximum - minimum + 1U));
-    }
-
-    static bool sameNodPlan(const EndNodPlan& left, const EndNodPlan& right)
-    {
-        return left.count == right.count &&
-               left.targetPitch == right.targetPitch &&
-               left.downSpeed == right.downSpeed &&
-               left.returnSpeed == right.returnSpeed &&
-               left.downHoldMs == right.downHoldMs &&
-               left.betweenHoldMs == right.betweenHoldMs &&
-               left.finalHoldMs == right.finalHoldMs;
-    }
-
     EndNodPlan randomEndNodPlan()
     {
-        EndNodPlan plan;
-        const uint32_t depthRoll = randomRange(0, 99);
-        if (depthRoll < 35) {
-            plan.targetPitch = static_cast<int>(randomRange(110, 130));
-        } else if (depthRoll < 80) {
-            plan.targetPitch = static_cast<int>(randomRange(80, 100));
-        } else {
-            plan.targetPitch = static_cast<int>(randomRange(50, 70));
-        }
-
-        // 深い5～7度は1回だけ。それ以外は全体で約30%が2回になる比率。
-        plan.count = plan.targetPitch <= 70
-                         ? 1
-                         : (randomRange(0, 99) < 38 ? 2 : 1);
-        plan.downSpeed = static_cast<int>(
-            randomRange(185, plan.targetPitch <= 70 ? 200 : 215));
-        plan.returnSpeed = static_cast<int>(randomRange(165, 190));
-        if (plan.returnSpeed >= plan.downSpeed) {
-            plan.returnSpeed = plan.downSpeed - 10;
-        }
-        plan.downHoldMs = randomRange(300, 450);
-        plan.betweenHoldMs = randomRange(330, 450);
-        plan.finalHoldMs = randomRange(550, 750);
-
-        if (hasLastNodPlan_ && sameNodPlan(plan, lastNodPlan_)) {
-            const int maximumDownSpeed = plan.targetPitch <= 70 ? 200 : 215;
-            plan.downSpeed = plan.downSpeed >= maximumDownSpeed
-                                 ? plan.downSpeed - 1
-                                 : plan.downSpeed + 1;
-        }
-        lastNodPlan_ = plan;
-        hasLastNodPlan_ = true;
-        return plan;
+        const EndNodRandomValues values{
+            esp_random(), esp_random(), esp_random(), esp_random(),
+            esp_random(), esp_random(), esp_random(), esp_random()};
+        return endNodPlanner_.next(values);
     }
 
     void handleTouch(uint32_t nowMs)
@@ -305,7 +257,6 @@ private:
             }
             pendingReaction_ = ReactionType::NONE;
             lastStartedReaction_ = ReactionType::NONE;
-            soundDirectionTracker_.endSession();
             Serial.println("[頭部タッチ] 機械音の判定抑制を開始");
         }
         const bool acceptsNewSwipe = !fatalError_ && !manualCalibrationUi_ &&
@@ -442,83 +393,6 @@ private:
         }
     }
 
-    static bool isSpeechTrackingState(ListenerState state)
-    {
-        return state == ListenerState::SPEECH_CANDIDATE ||
-               state == ListenerState::LISTENING ||
-               state == ListenerState::END_CANDIDATE;
-    }
-
-    void updateSoundTracking(uint32_t nowMs, bool newAudioBlock,
-                             bool detectionSuppressed)
-    {
-        if (!app_config::audio_direction::kEnableSoundServoTracking) {
-            soundDirectionTracker_.endSession();
-            return;
-        }
-
-        const ListenerState state = stateMachine_.state();
-        if (!isSpeechTrackingState(state) || headPetController_.active()) {
-            soundDirectionTracker_.endSession();
-            return;
-        }
-
-        soundDirectionTracker_.beginSession();
-        const AudioMetrics& metrics = audioDetector_.metrics();
-        const bool measurementAllowed =
-            !detectionSuppressed && motionController_.isReady() &&
-            !motionController_.isBusy();
-        // 自然な発話の短い音量低下は投票窓をリセットせず、単に無投票とする。
-        // サーボ・較正・なでなでによる抑制だけが途中の票を破棄する。
-        const bool voteSampleAvailable =
-            newAudioBlock && metrics.smoothedLevel >= metrics.endThreshold;
-        const SoundTrackingDecision decision = soundDirectionTracker_.update(
-            nowMs, voteSampleAvailable, measurementAllowed,
-            metrics.direction.direction);
-        if (!decision.turnRequested) {
-            return;
-        }
-
-        if (!motionController_.soundYaw(decision.targetYaw, nowMs,
-                                        decision.initialTurn)) {
-            setFatalError("サーボエラー");
-            return;
-        }
-        Serial.printf("[音追尾] %s -> yaw=%+.1f度 (%s)\n",
-                      AudioDirectionEstimator::directionName(
-                          decision.direction),
-                      static_cast<double>(decision.targetYaw) / 10.0,
-                      decision.initialTurn ? "初回" : "補正");
-    }
-
-    void handleSoundReturn(uint32_t nowMs)
-    {
-        if (!app_config::audio_direction::kEnableSoundServoTracking) {
-            return;
-        }
-
-        if (!soundDirectionTracker_.hasYawOffset() ||
-            isSpeechTrackingState(stateMachine_.state()) ||
-            stateMachine_.state() == ListenerState::REACTING ||
-            headPetController_.active() || manualCalibrationUi_ ||
-            audioDetector_.isCalibrating() || !motionController_.isReady() ||
-            motionController_.isBusy() ||
-            motionController_.isMicrophoneSuppressed(nowMs)) {
-            return;
-        }
-
-        const SoundTrackingDecision decision =
-            soundDirectionTracker_.requestReturnHome();
-        if (!decision.turnRequested) {
-            return;
-        }
-        if (!motionController_.returnYawHome(nowMs)) {
-            setFatalError("サーボエラー");
-            return;
-        }
-        Serial.println("[音追尾] 反応完了後、ゆっくり正面へ復帰");
-    }
-
     FaceExpression expressionForState() const
     {
         if (headPetController_.active()) {
@@ -617,7 +491,7 @@ private:
     AudioDetector audioDetector_;
     ListenerStateMachine stateMachine_;
     MotionController motionController_;
-    SoundDirectionTracker soundDirectionTracker_;
+    EndNodPlanner endNodPlanner_;
     FaceRenderer faceRenderer_;
     HeadPetController headPetController_{
         app_config::head_pet::kRestoreDelayMs,
@@ -645,8 +519,6 @@ private:
     ReactionType pendingReaction_{ReactionType::NONE};
     ReactionType lastStartedReaction_{ReactionType::NONE};
     EndNodPlan pendingNodPlan_{};
-    EndNodPlan lastNodPlan_{};
-    bool hasLastNodPlan_{false};
     uint32_t lastListeningNodMs_{0};
     bool lastLedPetting_{false};
 };
