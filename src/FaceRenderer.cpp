@@ -637,7 +637,7 @@ void FaceRenderer::showStartupGuide(uint8_t page)
                              display_->height() / 2 - 52);
         display_->drawString("NO RECORDING", display_->width() / 2,
                              display_->height() / 2 - 20);
-        display_->drawString("NO SPEECH ANALYSIS", display_->width() / 2,
+        display_->drawString("NO WORD ANALYSIS", display_->width() / 2,
                              display_->height() / 2 + 12);
         display_->drawString("LOCAL PROCESSING ONLY", display_->width() / 2,
                              display_->height() / 2 + 44);

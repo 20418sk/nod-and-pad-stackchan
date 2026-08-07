@@ -1,117 +1,373 @@
-# Nodding StackChan
+# Nod & Pat Stack-chan
 
-**A privacy-first companion that listens without recording.**
+[English](#english) | [日本語](#日本語)
 
-Nodding StackChan（日本語愛称: きいてるﾁｬﾝ）は、話の内容を解析せず、声の始まりと終わりを検出して自然にうなずく、製品版M5Stack StackChan K151向けのローカルアプリです。
+## English
 
-声を聞いている間は傾聴顔を保ち、話し終わると回数・深さ・速さを少しずつ変えたうなずきで応えます。頭をなでたり軽く触れたりすると、公式StackChan由来のHappy表情、ハート、照れ頬で喜びます。
+### A Standalone Companion That Responds Without Speech Recognition
 
-音声認識、録音保存、Wi-Fi、BLE、クラウド、生成AIは使用しません。マイクのPCMは短い処理バッファ内だけで扱い、保存・送信しません。通常版はカメラを初期化しません。
+**No audio files. No speech recognition. No cloud service. Just nods, faces, and touch.**
 
-## 対象
+Nod & Pat Stack-chan is a small companion for the M5Stack StackChan K151. The companion detects when a person starts and stops speaking. The companion responds with nods, facial expressions, light, and reactions to touch.
 
-- 製品版 M5Stack StackChan、SKU K151
-- StackChan Core（ESP32-S3）
-- 内蔵デュアルマイク、LCD、上下・横サーボ、頭部3ゾーンタッチ、RGB LED
+The firmware does not recognize words or generate replies. This design is intentional. The project asks a simple question:
 
-一般的な自作版、Core2版、CoreS3 Lite版は対象外です。PlatformIOの対象環境は`stackchan_k151`、ボードIDは`m5stack-cores3`です。
+> Does a companion need to understand our words to make us feel heard?
 
-## 主な反応
+The project is not against AI. AI can be useful when a product needs language understanding. This project is a counterpoint: language understanding is not necessary for this quiet, physical interaction.
 
-| 状態・入力 | 表情と動作 |
+### Design Principles
+
+- **Human-centered:** Small nonverbal reactions are more important than a large feature list.
+- **Privacy by design:** The firmware does not create audio files or conversation history.
+- **Data minimization:** The firmware processes only the signal values required for the current reaction.
+- **Standalone operation:** After firmware installation, everyday use needs no phone, account, Wi-Fi setup, cloud setup, or external computer.
+- **Predictable behavior:** Unreliable camera tracking and sound-direction servo tracking are not part of the current firmware.
+
+### Privacy by Design
+
+The internal microphones provide stereo PCM samples to three 20 ms RAM buffers. The firmware overwrites these buffers continuously. The firmware uses the samples only to calculate sound level, speech timing, and a diagnostic left/right estimate.
+
+- No audio files or conversation history are created.
+- No speech recognition or transcription is performed.
+- No word meaning, topic, or emotion is analyzed.
+- No camera is initialized.
+- No Wi-Fi, Bluetooth, BLE, HTTP, or cloud API is used by the application.
+- No conversation data is sent to an external service.
+- No audio, level history, or image is written to microSD, Flash, or NVS.
+- Serial diagnostics contain state names and numeric signal values, not raw audio or words.
+
+The M5Stack hardware and its libraries can support other functions. This application does not initialize or use those communication and camera functions.
+
+### Standalone and Everyday Setup
+
+The current prototype requires one firmware installation with PlatformIO and a USB cable. After installation, daily operation is local to Stack-chan. The startup guide asks the user to tap the screen and complete a three-second room-noise calibration. No network, account, mobile application, or cloud configuration is required.
+
+### Current Features
+
+| State or input | Current response |
 |---|---|
-| 待機 | 正面0°・上下20°。画面内で瞬き、わずかな呼吸、視線移動 |
-| 発話開始 | 「ん？」という傾聴顔。開始時にはサーボを動かさない |
-| 発話中 | 候補中と短い間は暗い緑、確定後は明るい緑。途中では首を動かさず、聞く表情を維持 |
-| 200 ms以上の発話終了 | 1～2回、最下点5～13°のランダムうなずき。必ず20°へ戻る |
-| 200 ms未満の音 | 反応しない |
-| 頭部スワイプ | Happy顔、ハート、照れ頬、桃色LED、小さな上向き動作 |
-| 頭部の短い接触 | Happy顔、ハート、照れ頬、桃色LED。サーボは動かさない |
-| 画面左・右の短押し | Happy反応とともに1回7°ずつ押した側へ向く。最大±45°、余韻後にゆっくり正面へ戻る |
-| 画面中央の短押し | 頭部の短い接触と同じHappy反応。サーボは動かさない |
-| 60秒の無音 | 上下8°の寝姿勢。`Z`が1→2→3個と循環 |
+| Idle | Blinking, subtle breathing motion on the display, and small gaze changes |
+| Speech starts | Listening face; the servos do not move at speech start |
+| Speech continues | Green LED and listening face; no mid-speech nod |
+| Speech ends after at least 200 ms | One or two varied nods, then a return to the 20° pitch home position |
+| Sound shorter than 200 ms | No reaction |
+| Head swipe across two adjacent zones | Happy face, one heart, blush, pink LED, and a small upward pitch motion |
+| Short head touch | Happy face, one heart, blush, and pink LED; no servo motion |
+| Short left or right screen tap | Happy response and a 7° yaw step toward the touched side, limited to ±45° |
+| Short center screen tap | Happy response without servo motion |
+| 60 seconds of silence | Sleep face, 8° pitch, and a repeating one-to-three `Z` indicator |
 
-発話開始には120 msの継続、終了には600 msの沈黙が必要です。発話終了時のうなずきは、浅め9～11°が35%、中間7～9°が45%、深め5～7°が20%です。7°以下は安全のため必ず1回に限定します。ほかは45%が2回です。下降速度195～225、復帰速度175～200、保持時間も制限範囲内で変え、直前と完全に同じ計画を避けます。
+The speech detector requires 120 ms above the start threshold. Speech ends after 600 ms below the end threshold. A completed speech reaction uses a randomized pitch target from 5° to 11°. A target from 5° to 7° always uses one nod. Other targets can use one or two nods. Every nod returns to 20°.
 
-デュアルマイクの左右推定は、デバッグ表示の`DIR:L/C/R/?`という診断値だけに使用します。室内反射などで揺れるため、横サーボへは接続していません。画面タッチによる横向きはマイク推定とは独立しています。
+The stereo microphone direction estimate appears only as `DIR:L/C/R/?` in the optional diagnostic display. Room reflections can make the estimate unstable. The estimate does not control the yaw servo. Screen-touch yaw control is independent of microphone direction.
 
-## ビルド
+### How It Works
 
-必要なもの:
+```text
+Internal stereo microphones
+  -> AudioDetector
+     -> ListenerStateMachine -> EndNodPlanner -> MotionController -> pitch servo
+     -> AudioDirectionEstimator -> diagnostic display only
 
-- Visual Studio Code
-- PlatformIO IDE拡張機能
-- データ通信対応USB-Cケーブル
-- 初回の依存取得に使うインターネット接続
+Three-zone head touch
+  -> HeadPetGestureDetector -> HeadPetController -> face, LED, and pitch servo
 
-PlatformIOのBuildボタン、または次のコマンドでビルドします。
+LCD touch -> Happy response and optional yaw step
+LCD -> FaceRenderer
+```
+
+The detector calculates RMS sound level. It uses a calibrated noise floor and dynamic thresholds. The firmware does not classify words. Servo motion and head contact suppress microphone decisions for a short period so that mechanical and touch sounds do not create false speech reactions.
+
+### Hardware
+
+- M5Stack StackChan K151 production model
+- StackChan Core with ESP32-S3
+- Internal stereo microphones
+- LCD touchscreen
+- Pitch and yaw servos
+- Three-zone head touch sensor
+- RGB LED
+
+Other DIY Stack-chan builds, Core2 models, and CoreS3 Lite models are outside the current target.
+
+### Software and Libraries
+
+- Arduino framework on `pioarduino/platform-espressif32 55.03.37`
+- M5Stack StackChan-BSP
+- M5Unified
+- M5GFX
+- Unity for native logic tests
+
+Versions and source revisions are pinned in [`platformio.ini`](platformio.ini). License details and upstream source references are in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
+### Build and Install
+
+Requirements:
+
+- Visual Studio Code with the PlatformIO IDE extension, or PlatformIO Core
+- A data-capable USB-C cable
+- Internet access for the first dependency download
+- M5Stack StackChan K151
+
+Build the K151 firmware:
 
 ```powershell
 pio run -e stackchan_k151
 ```
 
-純粋ロジックテスト:
+Run the pure logic tests:
 
 ```powershell
 pio test -e native
 ```
 
-Windowsで`pio`が見つからない場合は、VS CodeのPlatformIO画面から実行するか、PlatformIO Coreの実体を指定してください。nativeテストにはPATHから利用できるGCC/G++が必要ですが、K151ファームのビルドには不要です。
-
-開発・編集・ビルド対象は`C:\dev\hearing-chan`だけです。OneDrive側の同名フォルダーは使用しません。
-
-## 実機への書き込み
-
-可動部の周囲を空け、安定した机に置き、原則として台座側USB-Cポートを使用します。PlatformIOのUpload（右矢印）、またはポートを指定して書き込みます。
+Upload only after checking the build and keeping the moving parts clear:
 
 ```powershell
-pio run -e stackchan_k151 -t upload --upload-port COM3
+pio run -e stackchan_k151 -t upload --upload-port <PORT>
 ```
 
-このリポジトリの自動検証では、実機への書き込みを行いません。サーボが引っ掛かる、異音がする、発熱する場合は可動部を押さえず、台座側USBを抜いて停止してください。
+The build and test steps do not upload firmware automatically. If `pio` is not available in the terminal, use the PlatformIO buttons in Visual Studio Code or run the installed PlatformIO Core executable.
 
-## 操作
+### How to Use
 
-- 画面左・右を短くタップ: 単発タッチと同じHappy反応を出し、1回7°ずつ押した側へ向く。反対側なら7°戻り、最大±45°
-- 画面中央を短くタップ: 単発タッチと同じHappy反応
-- 画面中央を約1.2秒長押し: 約3秒のマイク再較正
-- 画面右上を約2秒長押し: デバッグ表示のON/OFF
-- 頭部を隣接2ゾーンにまたがってなでる: なでなで反応
-- 頭部へ40～400 ms触れて離す: 単発タッチ反応
+1. Power on Stack-chan on a stable surface.
+2. Wait for `SERVO TEST COMPLETE!`, then tap the screen.
+3. Keep the room quiet during the three-second microphone calibration.
+4. Read each startup page and tap `TAP TO START`.
+5. Speak normally, pat the head, swipe across two adjacent head zones, or tap the screen.
 
-頭部接触からリリース後900 msまでは、接触音を声と誤認しないよう音声判定とノイズ学習を抑制します。なでなで反応は手を離して約2秒後に戻ります。
+Controls after startup:
 
-短押しは40～700 msだけを受け付けるため、長押し操作とは重なりません。画面タッチによる横向きは待機中だけ受け付け、発話中・なでなで中・ほかのサーボ動作中は無視します。横サーボの動作中と直後はマイク判定を抑制します。
+- Short left or right screen tap: Happy response and one 7° yaw step, up to ±45°
+- Short center screen tap: Happy response only
+- Center long press for about 1.2 seconds: microphone recalibration
+- Upper-right long press for about 2 seconds: diagnostic display on or off
+- Head contact for 40–400 ms: short-touch Happy response
+- Head swipe across two adjacent zones: patting response with a small pitch motion
 
-横向きのHappy反応中も左右の次の短押しを受け付けます。横またはなでなでの上下サーボが動作中なら、最後に入力された累積角度を予約して停止直後に実行します。実際に頭部をなでると、その時点の横角度を維持したまま既存の小さな上下動作も加わります。なでなでの上下姿勢を戻してからゆっくり正面へ復帰します。横移動速度は7°刻みに合わせた230、1ステップの動作待ちは350 msです。
+The yaw servo returns slowly to 0° after the interaction. The working pitch range is 5°–72°. The working yaw range is ±45°. The firmware also clamps commands to the wider official BSP limits.
 
-本体上の文章はコンテスト展示を考慮して英語へ統一しています。起動時は`SERVO TESTING`から始まり、完了後の`SERVO TEST COMPLETE!`でタップするまで停止します。タップすると`MIC CALIBRATION`、`PLEASE BE QUIET`、`3..`→`3..2..`→`3..2..1..`と表示しながら環境音を較正します。その後`ALL TESTS COMPLETE!`→`YOUR PRIVACY`（NO CAMERA / NO RECORDING / NO SPEECH ANALYSIS / LOCAL PROCESSING ONLY）→`READY TO LISTEN`を1画面ずつタップで読み進めます。後半2画面はプライバシー説明と開始確認です。最後の`TAP TO START`で、必要な場合だけ低速で20°の通常姿勢へ整えてから通常の顔へ入ります。説明中は声への反応とノイズ学習を始めません。画面長押し時も同じ形式で再較正します。
+### Project Structure
 
-## 安全範囲
+```text
+include/                 configuration and module interfaces
+src/                     firmware implementation
+test/test_logic/         hardware-independent logic tests
+docs/design.md           architecture and design decisions
+docs/tuning-guide.md     K151 hardware verification guide
+platformio.ini           pinned build environments and dependencies
+THIRD_PARTY_NOTICES.md   licenses and upstream sources
+```
 
-- 公式上下範囲: 5～85°
-- 本作品の上下制限: 5～72°
-- 通常姿勢: 20°
-- 睡眠姿勢: 8°
-- 公式BSPの横範囲: ±128°
-- 本作品の横制限: ±45°。ホームは正面0°、画面タッチは1回7°・最大±45°
-- 停止後: BSPの自動トルク解放を使用
+### Current Limitations
 
-詳細な確認順序は[実機調整ガイド](docs/tuning-guide.md)、構成と判断理由は[設計資料](docs/design.md)を参照してください。
+- The firmware detects sound level and timing. It cannot identify a speaker or understand speech.
+- The sound-direction estimate is diagnostic only and can change with room reflections.
+- The camera is not used. There is no face tracking.
+- Microphone gain, room acoustics, touch response, and physical servo angles require verification on each K151 unit.
+- Firmware installation is required before everyday standalone use.
 
-## プライバシー設計
+### Future Work
 
-- 音声ファイル、PCM履歴、文字起こしを作らない
-- microSD、Flash、NVSへ音声や音量履歴を書かない
-- Wi-Fi、BLE、HTTP、クラウドAPIを使わない
-- カメラを初期化せず、画像を生成・保存・送信しない
-- シリアルには状態・音量・推定方向だけを表示し、生音声を出さない
+Camera face tracking and automatic sound-direction servo tracking were evaluated in prototypes. The results were not reliable enough on the K151. These functions are not included in the current firmware. Any future evaluation should use a separate development branch, real-device test data, and the existing servo safety limits.
 
-顔追尾と音方向サーボ追尾は試作で評価しましたが、K151実機で安定性が不足し、相手と逆を向く反応はコンセプトを損なうため製品版から除外しました。詳細は設計資料に記録しています。
+Future work may simplify firmware installation and startup. Commercial product distribution is outside the current project scope.
 
-## ライセンス
+### M5Stack Global Innovation Contest 2026
 
-- 本プロジェクト: [MIT License](LICENSE)
-- [第三者ライブラリと移植元](THIRD_PARTY_NOTICES.md)
+This project is prepared for the [M5Stack Global Innovation Contest 2026](https://m5stack.com/global-innovation-contest-2026). The project uses the M5Stack controller, microphones, touch sensors, display, LED, and servos to explore minimal and privacy-conscious human-robot interaction.
 
-公式StackChanファームウェアのデフォルトスキンとなでなで表現を、ライセンス表示を維持してM5GFX／Arduino向けに移植しています。
+### License
+
+- Project code: [MIT License](LICENSE)
+- Third-party libraries and adapted upstream work: [Third-Party Notices](THIRD_PARTY_NOTICES.md)
+
+The face proportions, expressions, and patting behavior are adapted from the official StackChan firmware for Arduino and M5GFX. The upstream license notice is preserved.
+
+---
+
+## 日本語
+
+### 音声認識を使わずに応える、スタンドアロンの小さな伴侶
+
+**音声ファイルなし。音声認識なし。クラウドなし。あるのは、うなずきと表情と触れ合いです。**
+
+Nod & Pat Stack-chan（日本語愛称：きいてるﾁｬﾝ）は、製品版M5Stack StackChan K151向けの小さな伴侶です。人が話し始めたことと話し終えたことを検出し、うなずき、表情、光、タッチ反応で応えます。
+
+このファームウェアは言葉を認識せず、返答も生成しません。これは意図した設計です。本作品は、次の問いから始まりました。
+
+> 人が「話を聞いてもらった」と感じるために、伴侶は本当に言葉を理解する必要があるのでしょうか。
+
+本作品はAIを否定するものではありません。言語理解が必要な製品ではAIが役立ちます。一方、この静かな身体的コミュニケーションには、言語理解を必須としない選択肢もあると考えました。
+
+### 設計原則
+
+- **人間中心：** 機能数より、小さな非言語反応を重視します。
+- **Privacy by Design：** 音声ファイルや会話履歴を作りません。
+- **データ最小化：** 現在の反応に必要な信号値だけを処理します。
+- **スタンドアロン動作：** ファームウェア導入後の日常利用には、スマートフォン、アカウント、Wi‑Fi設定、クラウド設定、外部コンピュータが不要です。
+- **予測しやすい動作：** 信頼性が不足したカメラ追尾と音方向サーボ追尾は、現在のファームウェアに含めません。
+
+### Privacy by Design
+
+内蔵マイクのステレオPCMは、RAM上の20 msバッファ3個へ入り、常に上書きされます。PCMから計算するのは、音量、発話タイミング、診断用の左右推定だけです。
+
+- 音声ファイルや会話履歴を作らない
+- 音声認識や文字起こしを行わない
+- 言葉の意味、話題、感情を解析しない
+- カメラを初期化しない
+- アプリからWi‑Fi、Bluetooth、BLE、HTTP、クラウドAPIを使用しない
+- 会話データを外部サービスへ送信しない
+- 音声、音量履歴、画像をmicroSD、Flash、NVSへ書き込まない
+- シリアル診断には状態名と数値信号だけを出し、生音声や言葉を出さない
+
+M5Stack本体とライブラリには別の機能もありますが、本アプリは通信機能とカメラ機能を初期化・使用しません。
+
+### スタンドアロンと日常利用の準備
+
+現在の試作機には、PlatformIOとUSBケーブルを使った1回のファームウェア導入が必要です。導入後の日常利用はStack-chan単体で完結します。起動案内に従って画面をタップし、3秒の環境音較正を行います。ネットワーク、アカウント、スマートフォンアプリ、クラウドの設定は不要です。
+
+### 現在の機能
+
+| 状態・入力 | 現在の反応 |
+|---|---|
+| 待機 | 画面内の瞬き、わずかな呼吸表現、小さな視線移動 |
+| 発話開始 | 傾聴顔。発話開始時はサーボを動かさない |
+| 発話中 | 緑LEDと傾聴顔。発話中うなずきは行わない |
+| 200 ms以上の発話終了 | 変化を付けた1～2回のうなずき後、上下20°へ戻る |
+| 200 ms未満の音 | 反応しない |
+| 頭部の隣接2ゾーンをスワイプ | Happy顔、ハート1個、照れ頬、桃色LED、小さな上向き動作 |
+| 頭部へ短く接触 | Happy顔、ハート1個、照れ頬、桃色LED。サーボは動かさない |
+| 画面左・右を短押し | Happy反応と、押した側への7°ずつの横向き。上限±45° |
+| 画面中央を短押し | サーボ動作なしのHappy反応 |
+| 60秒の無音 | 上下8°の寝姿勢と、1～3個を繰り返す`Z`表示 |
+
+発話開始には開始しきい値を120 ms連続で超える必要があります。終了には終了しきい値を600 ms連続で下回る必要があります。発話終了後の最下点は5～11°から選びます。5～7°の深いうなずきは必ず1回です。それ以外は1回または2回です。最後は必ず20°へ戻ります。
+
+デュアルマイクによる左右推定は、任意で表示できる診断画面の`DIR:L/C/R/?`だけに使います。室内反射で推定が揺れるため、横サーボには接続していません。画面タッチによる横向きは、マイク方向推定から独立しています。
+
+### 仕組み
+
+```text
+内蔵デュアルマイク
+  -> AudioDetector
+     -> ListenerStateMachine -> EndNodPlanner -> MotionController -> 上下サーボ
+     -> AudioDirectionEstimator -> 診断表示のみ
+
+頭部3ゾーンタッチ
+  -> HeadPetGestureDetector -> HeadPetController -> 表情、LED、上下サーボ
+
+LCDタッチ -> Happy反応と任意の横向き
+LCD -> FaceRenderer
+```
+
+発話検出には、RMS音量、較正したノイズ基準、動的しきい値を使います。言葉は分類しません。サーボ動作中と頭部接触中はマイク判定を短時間抑制し、機械音や接触音による誤反応を防ぎます。
+
+### ハードウェア
+
+- 製品版 M5Stack StackChan K151
+- ESP32-S3搭載StackChan Core
+- 内蔵デュアルマイク
+- LCDタッチスクリーン
+- 上下・横サーボ
+- 頭部3ゾーンタッチセンサー
+- RGB LED
+
+一般的な自作版、Core2版、CoreS3 Lite版は現在の対象外です。
+
+### ソフトウェアとライブラリ
+
+- `pioarduino/platform-espressif32 55.03.37`上のArduinoフレームワーク
+- M5Stack StackChan-BSP
+- M5Unified
+- M5GFX
+- 純粋ロジックテスト用Unity
+
+バージョンと取得元リビジョンは[`platformio.ini`](platformio.ini)へ固定しています。ライセンスと移植元は[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)に記載しています。
+
+### ビルドと導入
+
+必要なもの：
+
+- Visual Studio CodeとPlatformIO IDE拡張機能、またはPlatformIO Core
+- データ通信対応USB-Cケーブル
+- 初回の依存取得に使うインターネット接続
+- M5Stack StackChan K151
+
+K151ファームウェアをビルドします。
+
+```powershell
+pio run -e stackchan_k151
+```
+
+純粋ロジックテストを実行します。
+
+```powershell
+pio test -e native
+```
+
+ビルド確認後、可動部の周囲を空けてから、明示的に書き込みます。
+
+```powershell
+pio run -e stackchan_k151 -t upload --upload-port <PORT>
+```
+
+ビルドとテストだけでは実機へ自動書き込みしません。端末で`pio`が見つからない場合は、VS CodeのPlatformIOボタンを使うか、インストール済みPlatformIO Coreの実体を指定してください。
+
+### 使い方
+
+1. Stack-chanを安定した場所で起動します。
+2. `SERVO TEST COMPLETE!`まで待ち、画面をタップします。
+3. 3秒のマイク較正中は周囲を静かにします。
+4. 起動案内を1画面ずつ読み、`TAP TO START`を押します。
+5. 普通に話す、頭へ短く触れる、隣接2ゾーンをなでる、または画面をタップします。
+
+起動後の操作：
+
+- 画面左・右を短押し：Happy反応と1回7°の横向き。最大±45°
+- 画面中央を短押し：Happy反応のみ
+- 画面中央を約1.2秒長押し：マイク再較正
+- 画面右上を約2秒長押し：診断表示のON／OFF
+- 頭部へ40～400 ms接触：短接触Happy反応
+- 頭部の隣接2ゾーンをスワイプ：小さな上下動作を伴うなでなで反応
+
+横サーボは余韻後にゆっくり0°へ戻ります。作品内の上下範囲は5～72°、横範囲は±45°です。命令は、より広い公式BSP範囲に対しても二重に制限します。
+
+### プロジェクト構成
+
+```text
+include/                 設定値と各モジュールのインターフェース
+src/                     ファームウェア実装
+test/test_logic/         ハードウェア非依存の純粋ロジックテスト
+docs/design.md           構成と設計判断
+docs/tuning-guide.md     K151実機確認ガイド
+platformio.ini           ビルド環境と固定依存
+THIRD_PARTY_NOTICES.md   ライセンスと移植元
+```
+
+### 現在の制限
+
+- 音量とタイミングは検出できますが、話者の識別や発話内容の理解はできません。
+- 音方向推定は診断専用で、室内反射により揺れる場合があります。
+- カメラは使用せず、顔追尾はありません。
+- マイク感度、室内音響、タッチ反応、サーボ実角度はK151個体ごとの実機確認が必要です。
+- 日常的なスタンドアロン利用の前に、ファームウェア導入が必要です。
+
+### Future Work
+
+カメラ顔追尾と音方向サーボ追尾は試作で評価しましたが、K151で十分な信頼性を得られませんでした。現在のファームウェアには含めていません。将来再評価する場合は、別の開発ブランチ、実機データ、現在のサーボ安全制限を使います。
+
+将来はファームウェア導入と起動手順の簡略化を検討します。製品化や商用提供は現在のプロジェクト範囲に含みません。
+
+### M5Stack Global Innovation Contest 2026
+
+本作品は[M5Stack Global Innovation Contest 2026](https://m5stack.com/global-innovation-contest-2026)への応募用に整備しています。M5Stackのコントローラ、マイク、タッチセンサー、画面、LED、サーボを使い、最小限でプライバシーに配慮した人とロボットの関わり方を探ります。
+
+### ライセンス
+
+- 本プロジェクト：[MIT License](LICENSE)
+- 第三者ライブラリと移植元：[Third-Party Notices](THIRD_PARTY_NOTICES.md)
+
+顔の比率、表情、なでなで反応は公式StackChanファームウェアを参照し、Arduino／M5GFX向けに移植しています。移植元のライセンス表示を維持しています。

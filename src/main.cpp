@@ -20,7 +20,7 @@ public:
     void begin()
     {
         Serial.begin(115200);
-        Serial.println("\n[Nodding StackChan] 起動します");
+        Serial.println("\n[Nod & Pat Stack-chan] 起動します");
 
         // StackChan-BSP::begin()の実装内でM5Unified（M5.begin）も初期化される。
         M5StackChan.begin();

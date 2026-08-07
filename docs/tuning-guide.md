@@ -1,4 +1,4 @@
-# Nodding StackChan 実機調整ガイド
+# Nod & Pat Stack-chan 実機調整ガイド
 
 > 最初から大きな角度や高い速度へ変更しないでください。製品版StackChan K151を安定した机に置き、可動部の周囲を空け、原則として台座側USB-Cで給電します。引っ掛かり、異音、連続動作、強い発熱があれば、可動部を押さえずUSBを抜いて停止してください。
 
@@ -15,7 +15,7 @@
 
 画面に`SERVO TESTING`と表示され、現在角を読み取ります。冷間起動時の急な動作を避けるため、この段階では角度がずれていてもサーボを動かしません。確認後は`SERVO TEST COMPLETE!`で停止します。最後の`TAP TO START`時だけ、必要なら低速で上下20°・横0°へ整えます。
 
-`TAP TO TEST MIC`を短くタップすると、`MIC CALIBRATION`、`PLEASE BE QUIET`、`3..`→`3..2..`→`3..2..1..`が表示されます。この間は話したり本体へ触れたりしません。その後は`ALL TESTS COMPLETE!`→`YOUR PRIVACY`（NO CAMERA / NO RECORDING / NO SPEECH ANALYSIS / LOCAL PROCESSING ONLY）→`READY TO LISTEN`の順にタップで進み、最後の`TAP TO START`で起動完了です。後半2画面はテストではなく作品説明です。説明中は声に反応しません。
+`TAP TO TEST MIC`を短くタップすると、`MIC CALIBRATION`、`PLEASE BE QUIET`、`3..`→`3..2..`→`3..2..1..`が表示されます。この間は話したり本体へ触れたりしません。その後は`ALL TESTS COMPLETE!`→`YOUR PRIVACY`（NO CAMERA / NO RECORDING / NO WORD ANALYSIS / LOCAL PROCESSING ONLY）→`READY TO LISTEN`の順にタップで進み、最後の`TAP TO START`で起動完了です。後半2画面はテストではなく作品説明です。説明中は声に反応しません。
 
 - エラー顔や赤LEDが出ない
 - 横0°、上下20°が不自然でない
