@@ -1,13 +1,13 @@
-"""PIOArduinoのWindowsツールチェーン配置差を安全に吸収する。"""
+"""Handle PIOArduino toolchain path differences on Windows."""
 
 import os
 
 from SCons.Script import SetOption
 
-Import("env")  # type: ignore[name-defined]  # PlatformIO/SConsが提供する。
+Import("env")  # type: ignore[name-defined]  # Provided by PlatformIO/SCons.
 
-# C:\dev\hearing-chan内の中間ディレクトリ作成を安定させるため、
-# VS CodeのBuildボタンから実行した場合も1ジョブへ固定する。
+# Use one job so intermediate directory creation stays stable on Windows.
+# Apply the same setting when the build starts from the VS Code button.
 SetOption("num_jobs", 1)
 
 platform = env.PioPlatform()  # type: ignore[name-defined]

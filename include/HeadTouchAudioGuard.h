@@ -9,7 +9,7 @@ public:
     {
     }
 
-    // 接触またはリリースをactivityとして渡す。新しく抑制を開始した時だけtrue。
+    // Pass contact or release as activity. Return true only when suppression starts.
     bool update(uint32_t nowMs, bool activity);
     bool suppressed() const { return suppressed_; }
 

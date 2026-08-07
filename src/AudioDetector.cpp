@@ -14,15 +14,16 @@ bool timeElapsed(uint32_t nowMs, uint32_t sinceMs, uint32_t durationMs)
 
 bool AudioDetector::begin()
 {
-    // CoreS3ではスピーカーとマイクがI2S資源を共有するため、公式例どおり
-    // MVPで使わないスピーカーを明示的に停止してからマイクを開始する。
+    // CoreS3 shares I2S resources between the speaker and microphone.
+    // Stop the unused speaker before starting the microphone, as in the official example.
     M5.Speaker.end();
 
     auto micConfig               = M5.Mic.config();
     micConfig.sample_rate        = app_config::audio::kSampleRateHz;
     micConfig.noise_filter_level = app_config::audio::kMicNoiseFilterLevel;
-    // CoreS3ではinput_stereoが有効。左右を保持したまま録音し、
-    // 発話判定用のモノラルRMSは本クラス内で一時的に合成して求める。
+    // CoreS3 provides stereo input. Keep both channels in the short RAM buffer.
+    // This class combines the channels only to calculate RMS for speech timing.
+    // This signal path does not perform speech recognition or word analysis.
     M5.Mic.config(micConfig);
 
     healthy_ = M5.Mic.isEnabled() && M5.Mic.begin();
@@ -38,8 +39,9 @@ bool AudioDetector::update(uint32_t nowMs, bool allowNoiseLearning,
         return false;
     }
 
-    // M5Unified::Micは二重キューで非同期録音する。公式MIC例と同様に、
-    // 3バッファの2ブロック先へ録音し、完了済みバッファだけを解析する。
+    // M5Unified::Mic captures audio asynchronously with a double queue.
+    // Use three buffers and process only a completed buffer, as in the official example.
+    // Completed PCM is overwritten in RAM. The application does not store or send PCM.
     if (!M5.Mic.record(captureBuffers_[recordIndex_],
                        app_config::audio::kSamplesPerBlock *
                            app_config::audio::kStereoChannels,
@@ -125,8 +127,8 @@ void AudioDetector::processBlock(const int16_t* samples,
     if (allowDirectionEstimation) {
         metrics_.direction = directionEstimator_.update(samples, frameCount);
     } else {
-        // サーボ音の相関を次の投票へ持ち越さない。PCM取得自体は止めず、
-        // 完了済みバッファを通常どおり上書きして古い音も残さない。
+        // Do not carry servo-noise correlation into the next direction estimate.
+        // Capture continues so completed buffers overwrite old PCM as usual.
         directionEstimator_.reset();
         metrics_.direction = {};
     }
@@ -141,7 +143,7 @@ void AudioDetector::processBlock(const int16_t* samples,
     if (calibrating_) {
         updateCalibration(metrics_.rawRms, nowMs);
     } else if (allowNoiseLearning && metrics_.smoothedLevel < metrics_.startThreshold) {
-        // 一度に大きく変化させず、発話ピークや長い無音による崩壊を防ぐ。
+        // Limit each update so speech peaks or long silence cannot break the noise floor.
         const float lowerBound = metrics_.noiseFloor * 0.70F;
         const float upperBound = metrics_.noiseFloor * 1.30F;
         const float boundedSample = clampFloat(metrics_.rawRms, lowerBound, upperBound);
@@ -198,7 +200,7 @@ void AudioDetector::updateCalibration(float rms, uint32_t nowMs)
 void AudioDetector::finishCalibration()
 {
     if (calibrationCount_ > 0) {
-        // 平均ではなく中央値を使い、較正中の単発物音の影響を抑える。
+        // Use the median to reduce the effect of one short noise during calibration.
         float sorted[app_config::audio::kCalibrationSamples]{};
         for (std::size_t i = 0; i < calibrationCount_; ++i) {
             sorted[i] = calibrationValues_[i];

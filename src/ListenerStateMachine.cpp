@@ -97,6 +97,8 @@ ListenerOutput ListenerStateMachine::update(uint32_t nowMs, const ListenerInput&
         return output;
     }
 
+    // Ignore samples during servo motion, touch activity, and calibration.
+    // This prevents mechanical sound from changing the listening state.
     if (input.detectionSuppressed || !input.sampleAvailable) {
         return output;
     }
@@ -114,6 +116,8 @@ ListenerOutput ListenerStateMachine::update(uint32_t nowMs, const ListenerInput&
             break;
 
         case ListenerState::SPEECH_CANDIDATE:
+            // Require a continuous level hold before confirming speech.
+            // A short impact or tap should return directly to idle.
             if (input.level < input.startThreshold) {
                 transitionTo(ListenerState::IDLE, nowMs, output);
             } else {
@@ -134,6 +138,7 @@ ListenerOutput ListenerStateMachine::update(uint32_t nowMs, const ListenerInput&
             break;
 
         case ListenerState::END_CANDIDATE:
+            // Hysteresis keeps short pauses inside one listening session.
             if (input.level >= input.endThreshold) {
                 lastActivityMs_ = nowMs;
                 transitionTo(ListenerState::LISTENING, nowMs, output);
@@ -149,6 +154,7 @@ ListenerOutput ListenerStateMachine::update(uint32_t nowMs, const ListenerInput&
                     elapsed(nowMs, lastReactionMs_,
                             kMinimumReactionIntervalMs);
 
+                // The minimum interval prevents repeated nods during one conversation.
                 if (reaction == ReactionType::NONE || !intervalReady) {
                     transitionTo(ListenerState::COOLDOWN, nowMs, output);
                 } else {

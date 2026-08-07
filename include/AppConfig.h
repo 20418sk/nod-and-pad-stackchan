@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
-// 角度はStackChan-BSPに合わせた0.1度単位（200 = 20度）。
+// Servo angles use 0.1 degree units to match StackChan-BSP (200 = 20 degrees).
 namespace app_config {
 
 namespace audio {
@@ -32,7 +32,7 @@ constexpr uint8_t kMaxConsecutiveCaptureFailures = 4;
 }  // namespace audio
 
 namespace audio_direction {
-// 左右方向は画面上の診断表示だけに用い、サーボには接続しない。
+// The left/right estimate is diagnostic only. It does not control a servo.
 constexpr int kMaximumLagSamples = 3;
 constexpr float kMinimumCorrelation = 0.28F;
 constexpr float kMinimumPeakSeparation = 0.025F;

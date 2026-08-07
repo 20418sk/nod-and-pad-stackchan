@@ -12,6 +12,7 @@ class ScreenTouchMapper {
 public:
     static ScreenTouchRegion horizontalRegion(int x, int width)
     {
+        // Use three stable screen zones. Exact pixel positions are not needed.
         if (width <= 0) {
             return ScreenTouchRegion::CENTER;
         }
@@ -40,6 +41,7 @@ public:
     static int steppedYawTarget(int currentYaw, ScreenTouchRegion region,
                                 int step, int maximum)
     {
+        // Accumulate small yaw steps and stop at the configured safe limit.
         if (step < 0) {
             step = -step;
         }

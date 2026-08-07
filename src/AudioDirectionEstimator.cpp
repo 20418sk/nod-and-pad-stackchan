@@ -54,7 +54,7 @@ AudioDirectionEstimate AudioDirectionEstimator::update(
 
     float rawDirectionScore = 0.0F;
     if (rawConfidence > 0.0F && bestLag != 0) {
-        // corr(L[t], R[t+lag])。正のlagは左マイクへ先に届いたことを表す。
+        // corr(L[t], R[t+lag]): a positive lag means sound reached the left mic first.
         rawDirectionScore = bestLag > 0 ? 1.0F : -1.0F;
         if (kSwapStereoChannels) {
             rawDirectionScore = -rawDirectionScore;

@@ -9,8 +9,8 @@ struct HeadPetUpdate {
     bool visualChanged{false};
 };
 
-// 製品版StackChan公式ファームのHeadPetModifierと同じ責務を持つ純粋ロジック。
-// ハードウェア入力はmain.cpp側から渡すため、nativeテストで時刻境界も検証できる。
+// Pure logic with the same role as HeadPetModifier in the official firmware.
+// main.cpp supplies hardware input so native tests can verify time boundaries.
 class HeadPetController {
 public:
     HeadPetController(uint32_t restoreDelayMs, uint32_t decorationDurationMs)

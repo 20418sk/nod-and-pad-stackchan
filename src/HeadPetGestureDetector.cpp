@@ -41,7 +41,7 @@ bool HeadPetGestureDetector::update(
         anyTouched = anyTouched || touched[i];
     }
 
-    // どのゾーンでも、短い接触を完全に離した時点で1回タップとする。
+    // Accept one short touch only after every head zone is fully released.
     bool singleTapped = false;
     if (anyTouched && !tapContactActive_) {
         tapContactActive_  = true;
@@ -61,7 +61,7 @@ bool HeadPetGestureDetector::update(
         return true;
     }
 
-    // ループが一時的に遅れても、許容時間を超えた無接触を別操作として扱う。
+    // Treat a long no-contact gap as a separate gesture, even if one loop was delayed.
     if (anyTouched && releasePending_ &&
         elapsed(nowMs, releaseStartedMs_, releaseResetMs_)) {
         resetContact();
@@ -89,7 +89,7 @@ bool HeadPetGestureDetector::update(
         return false;
     }
 
-    // センサー境界で一瞬0になっても、短い隙間なら同じなで動作として扱う。
+    // Keep a short zero reading at a zone boundary in the same swipe gesture.
     releasePending_ = false;
 
     bool newlyTouched = false;

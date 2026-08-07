@@ -9,9 +9,9 @@ enum class HeadPetGestureType : uint8_t {
     SINGLE_TAP,
 };
 
-// StackChan-BSPが公開する頭部3領域の生タッチ強度から、
-// 隣接する2領域のなで移動を検出する純粋ロジック。
-// ハードウェアには依存しない。
+// Pure logic that reads the three head-touch levels exposed by StackChan-BSP.
+// A swipe requires movement across two adjacent zones.
+// This class has no hardware dependency.
 class HeadPetGestureDetector {
 public:
     HeadPetGestureDetector(uint32_t minimumMoveMs,
@@ -20,8 +20,8 @@ public:
                            uint32_t tapMinimumContactMs,
                            uint32_t tapMaximumContactMs);
 
-    // 隣接する2領域の移動、または短い1回タップで1回だけtrueを返す。
-    // 次のジェスチャーは、全領域から指を離した後に再び有効になる。
+    // Return true once for an adjacent-zone swipe or one short touch.
+    // A new gesture is allowed only after all zones are released.
     bool update(uint32_t nowMs,
                 const std::array<uint8_t, 3>& intensities);
 

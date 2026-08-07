@@ -12,12 +12,12 @@
 namespace {
 constexpr uint16_t kBackground = TFT_BLACK;
 constexpr uint16_t kPrimary    = TFT_WHITE;
-constexpr uint16_t kHeart      = 0xE986;  // 公式デコレータの #E13232 に近いRGB565
-constexpr uint16_t kBlush      = 0xFD33;  // 公式デコレータの #F7A59E に近いRGB565
+constexpr uint16_t kHeart      = 0xE986;  // RGB565 close to official decorator #E13232.
+constexpr uint16_t kBlush      = 0xFD33;  // RGB565 close to official decorator #F7A59E.
 constexpr uint16_t kPanel      = 0x0841;
 constexpr uint16_t kDebugText  = 0xBDF7;
 
-// 公式default skin: 320x240、目は中心から左右70px・上16px、口は下26px。
+// Official default skin: 320x240, eyes at center +/-70 px and -16 px, mouth at +26 px.
 constexpr int kCenterX  = 160;
 constexpr int kCenterY  = 120;
 constexpr int kLeftEyeX = kCenterX - 70;
@@ -39,8 +39,8 @@ bool FaceRenderer::begin(LGFX_Device& display)
     display_->setTextDatum(middle_center);
     display_->setTextColor(kPrimary, kBackground);
 
-    // 顔はPSRAM上の画面外バッファへ完成形を描いてから一括転送する。
-    // fillScreen() と各パーツの描画途中がLCDに見えることを防ぐ。
+    // Draw the complete face in an off-screen PSRAM buffer before one transfer.
+    // This prevents the LCD from showing fillScreen() and partial face drawing.
     canvas_.setPsram(true);
     canvas_.setColorDepth(16);
     canvasReady_ = canvas_.createSprite(display_->width(), display_->height()) !=
@@ -238,7 +238,7 @@ bool FaceRenderer::updateAnimationState(FaceExpression expression,
         }
     }
 
-    // 画面外バッファがない場合は、部分描画が見えてしまうため静止画を維持する。
+    // Keep a static face without the off-screen buffer to avoid visible partial drawing.
     if (!canvasReady_ ||
         (!supportsIdleAnimation(expression) && !pettingFadeActive_ &&
          previousFadeStage == pettingFadeStage_)) {
@@ -331,7 +331,7 @@ void FaceRenderer::drawFace(FaceExpression expression)
             break;
 
         case FaceExpression::LISTENING:
-            // 公式setSizeの拡大表現を傾聴用に控えめに適用。
+            // Apply a small version of the official setSize effect for listening.
             if (blinkClosed_) {
                 drawSleepyEye(kLeftEyeX, kEyeY + faceOffsetY_);
                 drawSleepyEye(kRightEyeX, kEyeY + faceOffsetY_);
@@ -346,7 +346,7 @@ void FaceRenderer::drawFace(FaceExpression expression)
             break;
 
         case FaceExpression::NODDING:
-            // 公式Happy: eyelid weight=72、左右rotation=±1550。
+            // Official Happy values: eyelid weight 72 and rotations +/-1550.
             drawHappyEye(kLeftEyeX, kEyeY + faceOffsetY_, true);
             drawHappyEye(kRightEyeX, kEyeY + faceOffsetY_, false);
             drawOfficialMouth(0);
@@ -356,7 +356,7 @@ void FaceRenderer::drawFace(FaceExpression expression)
             drawHappyEye(kLeftEyeX, kEyeY + faceOffsetY_, true);
             drawHappyEye(kRightEyeX, kEyeY + faceOffsetY_, false);
             drawOfficialMouth(0);
-            // 公式HeadPetModifierと同じ位置・色系統のハートと照れ頬。
+            // Place the heart and blush like the official HeadPetModifier.
             {
                 constexpr int8_t heartOffsets[4] = {0, -3, 0, 2};
                 const int heartY = heartOffsets[pettingHeartPhase_];
@@ -369,7 +369,7 @@ void FaceRenderer::drawFace(FaceExpression expression)
             break;
 
         case FaceExpression::SLEEPING:
-            // 公式Sleepy: eyelid weight=35。
+            // Official Sleepy value: eyelid weight 35.
             if (sleepTransitionStage_ == 1) {
                 drawRoundEye(kLeftEyeX, kEyeY + faceOffsetY_, 8);
                 drawRoundEye(kRightEyeX, kEyeY + faceOffsetY_, 8);
@@ -385,7 +385,7 @@ void FaceRenderer::drawFace(FaceExpression expression)
             break;
 
         case FaceExpression::ERROR:
-            // 公式Doubtを土台にした困り顔。
+            // Error expression based on the official Doubt face.
             drawThickLine(kLeftEyeX - 9, kEyeY - 2, kLeftEyeX + 9,
                           kEyeY + 3, 4, kPrimary);
             drawThickLine(kRightEyeX - 9, kEyeY + 3,
@@ -437,7 +437,7 @@ void FaceRenderer::drawSleepIndicator(uint8_t stage)
                       kPrimary);
     };
 
-    // 内蔵の小フォントは実機で潰れやすいため、線で明瞭な睡眠マークを描く。
+    // Draw a clear sleep mark with lines because the small built-in font is hard to read.
     drawZ(260, 45 + y, 22, 18, 3);
     if (stage >= 2) {
         drawZ(286, 29 + y, 15, 12, 2);
@@ -469,7 +469,7 @@ void FaceRenderer::drawOfficialMouth(int weight)
         weight = 100;
     }
 
-    // 公式値: weight 0で90x6、100で60x50、radius 0..16。
+    // Official values: 90x6 at weight 0, 60x50 at weight 100, radius 0..16.
     const int width  = 90 - ((30 * weight) / 100);
     const int height = 6 + ((44 * weight) / 100);
     const int radius = (16 * weight) / 100;

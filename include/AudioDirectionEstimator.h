@@ -3,8 +3,8 @@
 #include <cstddef>
 #include <cstdint>
 
-// 内蔵デュアルマイクから求める大まかな到来方向。
-// 顔や話者を識別する値ではなく、現在は診断表示だけに使う。
+// A rough sound direction from the internal stereo microphones.
+// The value does not identify a face or speaker. It is diagnostic only.
 enum class SoundDirection : uint8_t {
     UNKNOWN,
     CENTER,

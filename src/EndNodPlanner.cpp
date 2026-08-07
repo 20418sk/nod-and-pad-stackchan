@@ -33,7 +33,7 @@ EndNodPlan EndNodPlanner::next(const EndNodRandomValues& randomValues)
             mapToRange(randomValues.target, 50, 70));
     }
 
-    // 公式推奨範囲の下限に近い深いうなずきは、負荷を抑えて1回だけにする。
+    // Use one nod near the lower official limit to reduce servo load.
     plan.count = plan.targetPitch <= 70
                      ? 1
                      : (mapToRange(randomValues.count, 0, 99) < 45 ? 2 : 1);

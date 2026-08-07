@@ -22,7 +22,8 @@ public:
         Serial.begin(115200);
         Serial.println("\n[Nod & Pat Stack-chan] 起動します");
 
-        // StackChan-BSP::begin()の実装内でM5Unified（M5.begin）も初期化される。
+        // StackChan-BSP::begin() also initializes M5Unified through M5.begin().
+        // The application uses local hardware only. It starts no Wi-Fi, BLE, or network client.
         M5StackChan.begin();
 
         const uint32_t nowMs = millis();
@@ -73,7 +74,8 @@ public:
             Serial.println("[音] 再キャリブレーション開始");
         }
 
-        // サーボ到達と静音待ちの完了後、タップされるまでマイク較正へ進まない。
+        // Wait for servo verification and the quiet period.
+        // Microphone calibration starts only after the user taps the screen.
         if (!startupServoTestCompleteShown_ && !fatalError_ &&
             audioDetector_.healthy() &&
             motionController_.isReady() &&
@@ -125,7 +127,7 @@ public:
         }
 
         if (fatalError_) {
-            // エラー中もBSP更新と安全なホーム移動の完了監視だけは継続する。
+            // During a fatal error, update only the BSP and any safe home motion.
             yield();
             return;
         }
@@ -161,8 +163,8 @@ public:
         }
         const FaceExpression expression = expressionForState();
         const FaceDebugInfo debugInfo = makeDebugInfo();
-        // 表情が同じ状態遷移では再描画しない。音量がしきい値付近を
-        // 往復しても、LCDを不要に全画面更新しないためのちらつき対策。
+        // Do not redraw when a state change keeps the same expression.
+        // This prevents full-screen flicker when the level moves around a threshold.
         faceRenderer_.render(expression, debugInfo, nowMs);
         updateLedForState();
 
@@ -444,7 +446,7 @@ private:
             pendingPetRestore_ = false;
             petMotionUsed_ = false;
             pendingPetMotion_ = false;
-            // 頭部を叩いた機械音を、なでなで終了後に発話として処理しない。
+            // Do not treat head-contact noise as speech after the touch reaction ends.
             stateMachine_.resetToIdle(nowMs);
             lastStartedReaction_ = ReactionType::NONE;
         }
@@ -460,8 +462,8 @@ private:
                 gestureType == HeadPetGestureType::SINGLE_TAP);
             if (gestureType == HeadPetGestureType::SWIPE) {
                 if (motionController_.isBusy()) {
-                    // 横向きの途中でもなでなで入力を捨てず、移動完了後に
-                    // 上下動作を重ねる。
+                    // Keep a head swipe received during yaw motion.
+                    // Add the pitch motion after the current yaw motion ends.
                     pendingPetMotion_ = true;
                 } else {
                     petMotionUsed_ = motionController_.headPetMotion(nowMs) ||
@@ -500,8 +502,8 @@ private:
     void handleListenerOutput(const ListenerOutput& output, uint32_t nowMs)
     {
         if (output.wokeFromSleep) {
-            // 寝姿勢から安全ホームへ戻る間は音声判定を抑制し、起床のきっかけを
-            // そのまま発話として数えない。
+            // Suppress speech decisions while returning from sleep to the safe home.
+            // The wake sound must not also become a completed speech event.
             if (!motionController_.moveHome(nowMs)) {
             setFatalError("SERVO ERROR");
                 return;
@@ -518,8 +520,8 @@ private:
         }
 
         if (output.stateChanged && output.state == ListenerState::LISTENING) {
-            // 発話開始時は顔だけを切り替える。サーボを動かさないため、
-            // 短い声も自己音抑制で失わない。
+            // Change only the face when speech starts.
+            // No servo motion means a short voice is not lost during servo-noise suppression.
             const AudioDirectionEstimate& direction =
                 audioDetector_.metrics().direction;
             Serial.printf("[方向] %s lag=%d corr=%.2f conf=%.2f\n",
@@ -628,7 +630,8 @@ private:
         lastLedState_   = state;
         lastLedPetting_ = petting;
 
-        // 公式RGB例の168より十分低い範囲で、実機でも分かる差を付ける。
+        // Keep brightness well below the official example value of 168.
+        // The selected low values still show a clear difference on the device.
         if (petting) {
             setLed(16, 7, 8);
             return;
@@ -652,7 +655,7 @@ private:
 
     void setLed(uint8_t red, uint8_t green, uint8_t blue)
     {
-        // BSP実在API。値を低く抑え、常時高輝度にしない。
+        // Use the BSP RGB API with low values to avoid continuous high brightness.
         M5StackChan.showRgbColor(red, green, blue);
     }
 

@@ -13,7 +13,8 @@ bool MotionController::elapsed(uint32_t nowMs, uint32_t sinceMs, uint32_t durati
 
 void MotionController::begin(uint32_t nowMs)
 {
-    // BSPの自動角度同期で現在角から滑らかに始め、停止後は自動でトルクを抜く。
+    // Start smoothly from the measured angle with BSP auto-sync.
+    // Release servo torque automatically after motion stops.
     M5StackChan.Motion.setAutoAngleSyncEnabled(true);
     M5StackChan.Motion.setAutoTorqueReleaseEnabled(true);
 
@@ -89,7 +90,8 @@ void MotionController::update(uint32_t nowMs)
         failed_    = true;
         busy_      = false;
         yawBusy_   = false;
-        // 通信不良時は追加の角度指令を止め、可能ならトルクも解放する。
+        // Stop new angle commands after a servo communication failure.
+        // Release torque when the BSP can still accept the request.
         M5StackChan.Motion.setTorqueEnabled(false);
     }
 }
@@ -110,8 +112,8 @@ bool MotionController::endNod(const EndNodPlan& plan, uint32_t nowMs)
 
 bool MotionController::headPetMotion(uint32_t nowMs)
 {
-    // 公式版は複数の上下・左右動作から選ぶ。本作品はMVPの安全要件に従い、
-    // 現在位置から小さく上を向く上下軸動作だけを残す。
+    // The official firmware selects from several pitch and yaw motions.
+    // This project keeps one small upward pitch motion for predictable safety.
     const MotionStep sequence[] = {
         {currentPitch() + app_config::motion::kHeadPetRise,
          500, app_config::motion::kHeadPetSpeed},
@@ -184,8 +186,9 @@ bool MotionController::moveHomeAtSpeed(int speed, uint32_t moveDurationMs,
     if (!startSequence(sequence, 1, nowMs)) {
         return false;
     }
-    // 全動作の基準を必ず物理ホームへ合わせる。BSPのgoHome()は上下も0へ
-    // 動かすため使わず、作品側の安全な上下ホームと横0度を個別に指令する。
+    // Return every motion to the physical home reference.
+    // BSP goHome() also moves pitch to 0, so this project sends the safe pitch
+    // home and yaw 0 as separate targets.
     commandYawSafely(app_config::motion::kHomeYaw,
                      speed);
     return true;
@@ -317,7 +320,8 @@ void MotionController::commandYawSafely(int yawAngle, int speed)
 
 int MotionController::clampPitch(int pitchAngle)
 {
-    // 作品側安全範囲は公式5～85度より狭い。二重制限で設定ミスも防ぐ。
+    // The project range is narrower than the official 5 to 85 degree range.
+    // Clamp to both ranges so a configuration error cannot exceed either limit.
     int safePitch = pitchAngle;
     if (safePitch < app_config::motion::kWorkPitchMin) {
         safePitch = app_config::motion::kWorkPitchMin;
