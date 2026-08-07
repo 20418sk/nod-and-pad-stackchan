@@ -327,16 +327,22 @@ private:
     {
         if (fatalError_ || manualCalibrationUi_ || startupGuidePage_ != 0 ||
             !audioDetector_.healthy() || !motionController_.isReady() ||
-            motionController_.isBusy() || physicalPetSession_ ||
-            (headPetController_.active() && !screenLookActive_) ||
             stateMachine_.state() != ListenerState::IDLE) {
+            return;
+        }
+
+        const bool canQueueDuringMotion =
+            headPetController_.active() || screenLookActive_;
+        if (motionController_.isBusy() && !canQueueDuringMotion) {
             return;
         }
 
         const ScreenTouchRegion region = ScreenTouchMapper::horizontalRegion(
             touchStartedX_, M5StackChan.Display().width());
         if (region == ScreenTouchRegion::CENTER) {
-            screenBoopRequested_ = true;
+            if (!physicalPetSession_) {
+                screenBoopRequested_ = true;
+            }
             return;
         }
 
@@ -345,19 +351,44 @@ private:
             app_config::motion::kScreenTouchYawStep,
             app_config::motion::kScreenTouchYawMax);
         if (nextYaw != screenYawTarget_) {
-            if (!motionController_.lookTowardScreenTouch(nextYaw, nowMs)) {
-                setFatalError("SERVO ERROR");
+            screenYawTarget_ = nextYaw;
+            if (motionController_.isBusy()) {
+                pendingScreenYawMove_ = true;
+            } else if (!startScreenYawMove(nowMs)) {
                 return;
             }
-            screenYawTarget_ = nextYaw;
         }
-        screenBoopRequested_ = true;
+        if (!physicalPetSession_) {
+            screenBoopRequested_ = true;
+        }
         screenLookActive_ = true;
         screenLookStartedMs_ = nowMs;
     }
 
+    bool startScreenYawMove(uint32_t nowMs)
+    {
+        if (!motionController_.lookTowardScreenTouch(screenYawTarget_, nowMs)) {
+            setFatalError("SERVO ERROR");
+            return false;
+        }
+        pendingScreenYawMove_ = false;
+        screenLookActive_ = true;
+        screenLookStartedMs_ = nowMs;
+        return true;
+    }
+
     void updateScreenLook(uint32_t nowMs)
     {
+        if (pendingScreenYawMove_) {
+            if (!fatalError_ && !manualCalibrationUi_ &&
+                startupGuidePage_ == 0 && motionController_.isReady() &&
+                !motionController_.isBusy() &&
+                stateMachine_.state() == ListenerState::IDLE) {
+                startScreenYawMove(nowMs);
+            }
+            return;
+        }
+
         if (!screenLookActive_ ||
             !elapsed(nowMs, screenLookStartedMs_,
                      app_config::motion::kScreenTouchLookDurationMs) ||
@@ -372,6 +403,7 @@ private:
             return;
         }
         screenYawTarget_ = app_config::motion::kHomeYaw;
+        pendingScreenYawMove_ = false;
         screenLookActive_ = false;
     }
 
@@ -661,6 +693,7 @@ private:
     bool touchStartedInCalibrationArea_{false};
     bool screenLookActive_{false};
     bool screenBoopRequested_{false};
+    bool pendingScreenYawMove_{false};
     bool physicalPetSession_{false};
     bool manualCalibrationUi_{false};
     bool pendingManualCalibration_{false};

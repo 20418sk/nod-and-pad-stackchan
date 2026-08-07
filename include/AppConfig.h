@@ -73,12 +73,12 @@ constexpr int kReadyPoseSpeed = 70;
 constexpr int kHeadPetSpeed = 170;
 constexpr int kScreenTouchYawStep = 70;
 constexpr int kScreenTouchYawMax = 450;
-constexpr int kScreenTouchYawSpeed = 120;
+constexpr int kScreenTouchYawSpeed = 230;
 constexpr int kScreenTouchYawReturnSpeed = 90;
 
 constexpr uint32_t kServoSoundSuppressionAfterMs = 650;
 constexpr uint32_t kReadyPoseMoveMs = 2200;
-constexpr uint32_t kScreenTouchYawMoveMs = 520;
+constexpr uint32_t kScreenTouchYawMoveMs = 350;
 constexpr uint32_t kScreenTouchLookDurationMs = 3200;
 constexpr uint32_t kScreenTouchYawReturnMs = 1800;
 constexpr uint32_t kServoVerificationTimeoutMs = 4200;
