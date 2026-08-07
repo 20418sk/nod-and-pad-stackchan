@@ -1,6 +1,6 @@
 # Nod & Pat Stack-chan
 
-[English](#english) | [日本語](#日本語)
+[English](#english) | [日本語](#japanese)
 
 ## English
 
@@ -13,6 +13,8 @@ Nod & Pat Stack-chan is a small companion for the M5Stack StackChan K151. The co
 The firmware does not recognize words or generate replies. This design is intentional. The project asks a simple question:
 
 > Does a companion need to understand our words to make us feel heard?
+
+Because Stack-chan does not understand or store the content of a conversation, a person can choose to talk about private concerns or worries without turning the conversation into data for another service. This is a design goal, not a guarantee of safety in every situation.
 
 The project is not against AI. AI can be useful when a product needs language understanding. This project is a counterpoint: language understanding is not necessary for this quiet, physical interaction.
 
@@ -188,6 +190,8 @@ The face proportions, expressions, and patting behavior are adapted from the off
 
 ---
 
+<a id="japanese"></a>
+
 ## 日本語
 
 ### 音声認識を使わずに応える、スタンドアロンの小さな伴侶
@@ -199,6 +203,8 @@ Nod & Pat Stack-chan（日本語愛称：きいてるﾁｬﾝ）は、製品版
 このファームウェアは言葉を認識せず、返答も生成しません。これは意図した設計です。本作品は、次の問いから始まりました。
 
 > 人が「話を聞いてもらった」と感じるために、伴侶は本当に言葉を理解する必要があるのでしょうか。
+
+会話の内容を理解・保存しないからこそ、秘密や悩みを外部サービスのデータに変えず、自分の意思で話せる余地を作ります。これは設計目標であり、あらゆる状況での安全を保証する表現ではありません。
 
 本作品はAIを否定するものではありません。言語理解が必要な製品ではAIが役立ちます。一方、この静かな身体的コミュニケーションには、言語理解を必須としない選択肢もあると考えました。
 
