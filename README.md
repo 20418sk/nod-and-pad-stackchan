@@ -8,6 +8,10 @@
 
 **No audio files. No speech recognition. No cloud service. Just nods, faces, and touch.**
 
+This project began with a simple wish:
+
+> I wanted a cute companion I could talk to freely, even about secrets and everyday frustrations.
+
 Nod & Pat Stack-chan is a small companion for the M5Stack StackChan K151. The companion detects when a person starts and stops speaking. The companion responds with nods, facial expressions, light, and reactions to touch.
 
 The firmware does not recognize words or generate replies. This design is intentional. The project asks a simple question:
@@ -197,6 +201,10 @@ The face proportions, expressions, and patting behavior are adapted from the off
 ### 音声認識を使わずに応える、スタンドアロンの小さな伴侶
 
 **音声ファイルなし。音声認識なし。クラウドなし。あるのは、うなずきと表情と触れ合いです。**
+
+本作品は、こんな素朴な思いから始まりました。
+
+> 秘密や日々の愚痴まで、気兼ねなく話せるかわいい存在が欲しかった。
 
 Nod & Pat Stack-chan（日本語愛称：きいてるﾁｬﾝ）は、製品版M5Stack StackChan K151向けの小さな伴侶です。人が話し始めたことと話し終えたことを検出し、うなずき、表情、光、タッチ反応で応えます。
 

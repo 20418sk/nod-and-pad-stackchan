@@ -1,0 +1,179 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title description">
+  <title id="title">Nod and Pat Stack-chan functional schematic</title>
+  <desc id="description">A block diagram showing voice and touch input, on-device activity timing and interaction logic, nod and facial outputs, and privacy properties. The firmware does not perform speech recognition, transcription, semantic analysis, cloud communication, or audio storage.</desc>
+
+  <defs>
+    <marker id="arrow-blue" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L12,6 L0,12 Z" fill="#2474a8"/>
+    </marker>
+    <marker id="arrow-green" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L12,6 L0,12 Z" fill="#287a63"/>
+    </marker>
+    <marker id="arrow-orange" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L12,6 L0,12 Z" fill="#b96818"/>
+    </marker>
+    <filter id="soft-shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#17324d" flood-opacity="0.12"/>
+    </filter>
+    <style>
+      text { font-family: Arial, "Noto Sans", sans-serif; fill: #17324d; }
+      .title { font-size: 38px; font-weight: 700; }
+      .subtitle { font-size: 20px; fill: #496273; }
+      .column { font-size: 18px; font-weight: 700; letter-spacing: 1.8px; }
+      .card-title { font-size: 22px; font-weight: 700; }
+      .card-text { font-size: 17px; fill: #365164; }
+      .small { font-size: 15px; fill: #496273; }
+      .badge { font-size: 16px; font-weight: 700; }
+      .privacy-title { font-size: 18px; font-weight: 700; letter-spacing: 0.8px; }
+      .privacy-text { font-size: 16px; fill: #365164; }
+      .arrow { fill: none; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="900" fill="#ffffff"/>
+
+  <text x="50" y="58" class="title">Nod &amp; Pat Stack-chan — Functional Schematic</text>
+  <text x="50" y="91" class="subtitle">Speech timing and touch create local, nonverbal reactions.</text>
+
+  <rect x="1048" y="34" width="272" height="34" rx="17" fill="#edf7f3" stroke="#77ad99"/>
+  <text x="1184" y="57" text-anchor="middle" class="badge" fill="#1f654f">STANDARD K151 HARDWARE</text>
+  <rect x="1330" y="34" width="220" height="34" rx="17" fill="#f4f6f8" stroke="#9cabb5"/>
+  <text x="1440" y="57" text-anchor="middle" class="badge" fill="#496273">NO CUSTOM CIRCUIT</text>
+
+  <text x="188" y="144" text-anchor="middle" class="column" fill="#2474a8">INPUT</text>
+  <text x="780" y="144" text-anchor="middle" class="column" fill="#287a63">ON-DEVICE PROCESSING</text>
+  <text x="1402" y="144" text-anchor="middle" class="column" fill="#b96818">OUTPUT</text>
+
+  <!-- Input: user voice -->
+  <rect x="50" y="175" width="276" height="182" rx="18" fill="#eef7fc" stroke="#78b3d4" stroke-width="2" filter="url(#soft-shadow)"/>
+  <circle cx="101" cy="230" r="23" fill="none" stroke="#2474a8" stroke-width="4"/>
+  <path d="M64 302 C70 266,132 266,138 302" fill="none" stroke="#2474a8" stroke-width="4" stroke-linecap="round"/>
+  <path d="M159 220 C175 210,175 250,159 240" fill="none" stroke="#2474a8" stroke-width="4" stroke-linecap="round"/>
+  <path d="M174 207 C197 192,197 266,174 252" fill="none" stroke="#2474a8" stroke-width="4" stroke-linecap="round"/>
+  <text x="205" y="219" text-anchor="middle" class="card-title">User voice</text>
+  <text x="205" y="250" text-anchor="middle" class="card-text">Speech-like</text>
+  <text x="205" y="274" text-anchor="middle" class="card-text">sound activity</text>
+  <text x="188" y="330" text-anchor="middle" class="small">Voice content is not required</text>
+
+  <!-- Input: touch -->
+  <rect x="50" y="430" width="276" height="182" rx="18" fill="#eef7fc" stroke="#78b3d4" stroke-width="2" filter="url(#soft-shadow)"/>
+  <path d="M89 553 L89 493 C89 481,105 481,105 493 L105 523 L105 480 C105 468,121 468,121 480 L121 521 L121 486 C121 474,137 474,137 486 L137 525 L137 498 C137 486,153 486,153 498 L153 542 C153 571,130 586,106 577 L84 568 C72 563,76 548,89 553 Z" fill="none" stroke="#2474a8" stroke-width="4" stroke-linejoin="round"/>
+  <text x="222" y="485" text-anchor="middle" class="card-title">Touch</text>
+  <text x="222" y="518" text-anchor="middle" class="card-text">Head touch</text>
+  <text x="222" y="542" text-anchor="middle" class="card-text">Screen touch</text>
+  <text x="188" y="587" text-anchor="middle" class="small">Tap or swipe</text>
+
+  <!-- On-device boundary -->
+  <rect x="360" y="165" width="840" height="470" rx="24" fill="#f5fbf8" stroke="#4c947d" stroke-width="3" stroke-dasharray="10 8"/>
+  <rect x="385" y="181" width="310" height="31" rx="15" fill="#dcefe8"/>
+  <text x="540" y="202" text-anchor="middle" class="badge" fill="#1f654f">M5STACK STACKCHAN K151</text>
+
+  <!-- Voice processing chain -->
+  <rect x="390" y="240" width="174" height="122" rx="14" fill="#ffffff" stroke="#77ad99" stroke-width="2"/>
+  <text x="477" y="276" text-anchor="middle" class="card-title">Stereo</text>
+  <text x="477" y="302" text-anchor="middle" class="card-title">microphones</text>
+  <text x="477" y="335" text-anchor="middle" class="small">Built into K151</text>
+
+  <rect x="595" y="240" width="174" height="122" rx="14" fill="#ffffff" stroke="#77ad99" stroke-width="2"/>
+  <text x="682" y="276" text-anchor="middle" class="card-title">Short RAM</text>
+  <text x="682" y="302" text-anchor="middle" class="card-title">buffers</text>
+  <text x="682" y="335" text-anchor="middle" class="small">3 × 20 ms, overwritten</text>
+
+  <rect x="800" y="240" width="174" height="122" rx="14" fill="#ffffff" stroke="#77ad99" stroke-width="2"/>
+  <text x="887" y="275" text-anchor="middle" class="card-title">Sound level</text>
+  <text x="887" y="302" text-anchor="middle" class="card-text">RMS + calibrated</text>
+  <text x="887" y="326" text-anchor="middle" class="card-text">thresholds</text>
+
+  <rect x="1005" y="240" width="170" height="122" rx="14" fill="#e7f4ee" stroke="#4c947d" stroke-width="3"/>
+  <text x="1090" y="273" text-anchor="middle" class="card-title">Voice activity</text>
+  <text x="1090" y="300" text-anchor="middle" class="card-title">timing</text>
+  <rect x="1027" y="318" width="126" height="26" rx="13" fill="#cde8dd"/>
+  <text x="1090" y="336" text-anchor="middle" class="badge" fill="#1f654f">START / END ONLY</text>
+
+  <path d="M326 266 L375 266" class="arrow" stroke="#2474a8" marker-end="url(#arrow-blue)"/>
+  <path d="M564 301 L580 301" class="arrow" stroke="#287a63" marker-end="url(#arrow-green)"/>
+  <path d="M769 301 L785 301" class="arrow" stroke="#287a63" marker-end="url(#arrow-green)"/>
+  <path d="M974 301 L990 301" class="arrow" stroke="#287a63" marker-end="url(#arrow-green)"/>
+
+  <!-- Touch processing chain -->
+  <rect x="390" y="450" width="205" height="122" rx="14" fill="#ffffff" stroke="#77ad99" stroke-width="2"/>
+  <text x="492" y="486" text-anchor="middle" class="card-title">Built-in touch</text>
+  <text x="492" y="516" text-anchor="middle" class="card-text">3-zone head sensor</text>
+  <text x="492" y="541" text-anchor="middle" class="card-text">LCD touchscreen</text>
+
+  <rect x="630" y="450" width="205" height="122" rx="14" fill="#ffffff" stroke="#77ad99" stroke-width="2"/>
+  <text x="732" y="488" text-anchor="middle" class="card-title">Touch detection</text>
+  <text x="732" y="519" text-anchor="middle" class="card-text">Short touch</text>
+  <text x="732" y="544" text-anchor="middle" class="card-text">Two-zone swipe</text>
+
+  <rect x="875" y="430" width="300" height="162" rx="16" fill="#dcefe8" stroke="#287a63" stroke-width="3"/>
+  <text x="1025" y="470" text-anchor="middle" class="card-title">Interaction logic</text>
+  <text x="1025" y="502" text-anchor="middle" class="card-text">Listening state</text>
+  <text x="1025" y="527" text-anchor="middle" class="card-text">Touch reaction state</text>
+  <text x="1025" y="552" text-anchor="middle" class="card-text">Safe motion plan</text>
+  <text x="1025" y="578" text-anchor="middle" class="small">Servo and touch noise are suppressed</text>
+
+  <path d="M326 520 L375 520" class="arrow" stroke="#2474a8" marker-end="url(#arrow-blue)"/>
+  <path d="M595 511 L615 511" class="arrow" stroke="#287a63" marker-end="url(#arrow-green)"/>
+  <path d="M835 511 L860 511" class="arrow" stroke="#287a63" marker-end="url(#arrow-green)"/>
+  <path d="M1090 362 L1090 415" class="arrow" stroke="#287a63" marker-end="url(#arrow-green)"/>
+
+  <!-- Outputs -->
+  <rect x="1260" y="205" width="290" height="170" rx="18" fill="#fff7ed" stroke="#d69a55" stroke-width="2" filter="url(#soft-shadow)"/>
+  <circle cx="1308" cy="257" r="25" fill="none" stroke="#b96818" stroke-width="4"/>
+  <path d="M1308 282 L1308 330 M1284 303 L1332 303" fill="none" stroke="#b96818" stroke-width="4" stroke-linecap="round"/>
+  <path d="M1286 233 C1297 218,1319 218,1330 233" fill="none" stroke="#b96818" stroke-width="4"/>
+  <text x="1418" y="246" text-anchor="middle" class="card-title">Nod + servo</text>
+  <text x="1418" y="276" text-anchor="middle" class="card-text">1–2 pitch nods</text>
+  <text x="1418" y="301" text-anchor="middle" class="card-text">Screen-tap yaw</text>
+  <text x="1418" y="326" text-anchor="middle" class="card-text">Clamped safety limits</text>
+  <text x="1405" y="354" text-anchor="middle" class="small">Returns to the home pose</text>
+
+  <rect x="1260" y="430" width="290" height="170" rx="18" fill="#fff7ed" stroke="#d69a55" stroke-width="2" filter="url(#soft-shadow)"/>
+  <circle cx="1310" cy="488" r="32" fill="none" stroke="#b96818" stroke-width="4"/>
+  <path d="M1295 480 L1302 480 M1318 480 L1325 480" stroke="#b96818" stroke-width="4" stroke-linecap="round"/>
+  <path d="M1297 499 Q1310 511 1323 499" fill="none" stroke="#b96818" stroke-width="4" stroke-linecap="round"/>
+  <text x="1418" y="475" text-anchor="middle" class="card-title">Face + light</text>
+  <text x="1418" y="508" text-anchor="middle" class="card-text">Listening face</text>
+  <text x="1418" y="533" text-anchor="middle" class="card-text">Happy touch reaction</text>
+  <text x="1418" y="558" text-anchor="middle" class="card-text">Green / pink RGB LED</text>
+  <text x="1405" y="585" text-anchor="middle" class="small">All output stays on the device</text>
+
+  <path d="M1175 500 L1225 500 L1225 290 L1245 290" class="arrow" stroke="#b96818" marker-end="url(#arrow-orange)"/>
+  <path d="M1225 500 L1245 500" class="arrow" stroke="#b96818" marker-end="url(#arrow-orange)"/>
+
+  <!-- Privacy by Design -->
+  <rect x="50" y="675" width="1500" height="175" rx="22" fill="#f7f9fb" stroke="#98a9b5" stroke-width="2"/>
+  <text x="78" y="712" class="column" fill="#17324d">PRIVACY BY DESIGN</text>
+  <text x="1520" y="712" text-anchor="end" class="small">Firmware installation: PlatformIO + USB</text>
+
+  <line x1="415" y1="730" x2="415" y2="824" stroke="#c2ccd3" stroke-width="2"/>
+  <line x1="790" y1="730" x2="790" y2="824" stroke="#c2ccd3" stroke-width="2"/>
+  <line x1="1165" y1="730" x2="1165" y2="824" stroke="#c2ccd3" stroke-width="2"/>
+
+  <circle cx="82" cy="758" r="11" fill="#287a63"/>
+  <path d="M77 758 L81 762 L88 753" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="105" y="765" class="privacy-title">USES ONLY</text>
+  <text x="82" y="795" class="privacy-text">Sound level</text>
+  <text x="82" y="819" class="privacy-text">Start / end timing</text>
+
+  <circle cx="452" cy="758" r="11" fill="#b84545"/>
+  <path d="M447 753 L457 763 M457 753 L447 763" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+  <text x="475" y="765" class="privacy-title">NO SPEECH CONTENT</text>
+  <text x="452" y="795" class="privacy-text">No speech recognition or transcription</text>
+  <text x="452" y="819" class="privacy-text">No word or meaning analysis</text>
+
+  <circle cx="827" cy="758" r="11" fill="#b84545"/>
+  <path d="M822 753 L832 763 M832 753 L822 763" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+  <text x="850" y="765" class="privacy-title">NO EXTERNAL SERVICE</text>
+  <text x="827" y="795" class="privacy-text">No cloud or external communication</text>
+  <text x="827" y="819" class="privacy-text">No audio files or conversation history</text>
+
+  <circle cx="1202" cy="758" r="11" fill="#287a63"/>
+  <path d="M1197 758 L1201 762 L1208 753" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="1225" y="765" class="privacy-title">EVERYDAY USE</text>
+  <text x="1202" y="795" class="privacy-text">No Wi-Fi setup after installation</text>
+  <text x="1202" y="819" class="privacy-text">No phone, account, or external computer</text>
+
+  <text x="800" y="881" text-anchor="middle" class="small">No external custom circuit • Uses the standard M5Stack StackChan K151 hardware configuration</text>
+</svg>
