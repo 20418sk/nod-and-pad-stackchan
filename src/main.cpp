@@ -428,6 +428,10 @@ private:
         }
         const bool acceptsNewSwipe = !fatalError_ && !manualCalibrationUi_ &&
                                      startupGuidePage_ == 0 &&
+                                     !calibrationUiActive_ &&
+                                     !audioDetector_.isCalibrating() &&
+                                     stateMachine_.state() !=
+                                         ListenerState::STARTUP &&
                                      audioDetector_.healthy() &&
                                      motionController_.isReady();
 

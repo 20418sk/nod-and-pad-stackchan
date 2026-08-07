@@ -629,16 +629,18 @@ void FaceRenderer::showStartupGuide(uint8_t page)
     display_->setTextColor(kPrimary, kBackground);
     if (page == 3) {
         display_->drawString(title, display_->width() / 2,
-                             display_->height() / 2 - 78);
+                             display_->height() / 2 - 88);
         // M5GFX's Font3 slot maps to its compact built-in font.
         display_->setTextFont(3);
         display_->setTextSize(2.0f);
+        display_->drawString("NO CAMERA", display_->width() / 2,
+                             display_->height() / 2 - 52);
         display_->drawString("NO RECORDING", display_->width() / 2,
-                             display_->height() / 2 - 30);
+                             display_->height() / 2 - 20);
         display_->drawString("NO SPEECH ANALYSIS", display_->width() / 2,
-                             display_->height() / 2 + 6);
+                             display_->height() / 2 + 12);
         display_->drawString("LOCAL PROCESSING ONLY", display_->width() / 2,
-                             display_->height() / 2 + 42);
+                             display_->height() / 2 + 44);
         display_->setTextSize(1.0f);
     } else {
         display_->drawString(title, display_->width() / 2,

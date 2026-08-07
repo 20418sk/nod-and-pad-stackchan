@@ -70,7 +70,7 @@ constexpr int kHeadPetRise = 70;
 
 constexpr int kHomeSpeed = 150;
 constexpr int kReadyPoseSpeed = 70;
-constexpr int kHeadPetSpeed = 170;
+constexpr int kHeadPetSpeed = 210;
 constexpr int kScreenTouchYawStep = 70;
 constexpr int kScreenTouchYawMax = 450;
 constexpr int kScreenTouchYawSpeed = 230;

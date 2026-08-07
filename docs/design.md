@@ -80,7 +80,7 @@ IDLE → SLEEPING → 声を検出 → IDLE
 
 起動時に`SERVO TESTING`と表示して現在角を読みます。起動時のサーボテストは読み取り専用で、電源投入直後に補正移動を行いません。サーボ音抑制後は`SERVO TEST COMPLETE!`で停止し、利用者のタップ後に`MIC CALIBRATION / PLEASE BE QUIET (3 SEC)`を表示しながら3秒の環境音較正を行います。最後の`TAP TO START`時に現在角が通常姿勢から外れている場合だけ、低速70で20°・横0°へ整えます。20ms単位で最大128個のRMSを保持し、直近最大約2.56秒分の中央値をノイズ基準にします。
 
-較正後は`ALL TESTS COMPLETE!`で停止し、画面タップごとに`YOUR PRIVACY`（NO RECORDING / NO SPEECH ANALYSIS / LOCAL PROCESSING ONLY）、`READY TO LISTEN`を表示します。最後の`TAP TO START`までは発話判定・方向推定・ノイズ学習を止め、説明中の声やタップ音を誤って反応へ使いません。画面上の文章とエラー名は英語へ統一しています。失敗時は追加動作を止め、トルク解放を要求し、エラー顔と赤LEDを表示します。BSPの自動トルク解放も明示的に有効化します。
+較正後は`ALL TESTS COMPLETE!`で停止し、画面タップごとに`YOUR PRIVACY`（NO CAMERA / NO RECORDING / NO SPEECH ANALYSIS / LOCAL PROCESSING ONLY）、`READY TO LISTEN`を表示します。最後の`TAP TO START`までは発話判定・方向推定・ノイズ学習を止め、説明中の声やタップ音を誤って反応へ使いません。カメラを初期化しないこともプライバシー設計の明示的な一項目です。画面上の文章とエラー名は英語へ統一しています。失敗時は追加動作を止め、トルク解放を要求し、エラー顔と赤LEDを表示します。BSPの自動トルク解放も明示的に有効化します。
 
 ## 画面タッチUI
 
