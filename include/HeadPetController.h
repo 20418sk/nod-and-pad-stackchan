@@ -9,8 +9,10 @@ struct HeadPetUpdate {
     bool visualChanged{false};
 };
 
-// Pure logic with the same role as HeadPetModifier in the official firmware.
+// The interaction idea is adapted from HeadPetModifier in the official firmware.
+// This project uses its own timing state machine and safer fixed motion.
 // main.cpp supplies hardware input so native tests can verify time boundaries.
+// See THIRD_PARTY_NOTICES.md for the upstream source and license.
 class HeadPetController {
 public:
     HeadPetController(uint32_t restoreDelayMs, uint32_t decorationDurationMs)

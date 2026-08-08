@@ -1,7 +1,11 @@
 /*
- * 製品版StackChan公式ファームのdefault skinをM5GFX向けに移植。
- * Original: Copyright (c) 2026 M5Stack Technology CO LTD, MIT License
+ * Portions adapt the official StackChan default skin and decorators to M5GFX.
+ * SPDX-FileCopyrightText: 2026 M5Stack Technology CO LTD
+ * SPDX-FileCopyrightText: 2026 Nodding StackChan contributors
+ * SPDX-License-Identifier: MIT
+ * Upstream: https://github.com/m5stack/StackChan
  * Source revision: b72b3ede38b32d54f0b6ba51c62cfcef2ec3ae1e
+ * See THIRD_PARTY_NOTICES.md for the exact mapping and MIT notice.
  */
 #include "FaceRenderer.h"
 
